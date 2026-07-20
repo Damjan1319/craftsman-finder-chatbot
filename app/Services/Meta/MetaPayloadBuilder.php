@@ -1,0 +1,125 @@
+<?php
+
+namespace App\Services\Meta;
+
+class MetaPayloadBuilder
+{
+    public const BTN_SERVICE = 'Izaberi uslugu';
+
+    public const BTN_HOME = 'Početak';
+
+    public const BTN_ABOUT = 'O nama';
+
+    public function mainMenuButtons(): array
+    {
+        return [
+            $this->postbackButton(self::BTN_SERVICE, 'act:find'),
+            $this->postbackButton(self::BTN_ABOUT, 'act:about'),
+            $this->postbackButton(self::BTN_HOME, 'act:main'),
+        ];
+    }
+
+    public function backButton(): array
+    {
+        return [
+            $this->postbackButton(self::BTN_HOME, 'act:main'),
+        ];
+    }
+
+    public function craftsmenFooterButtons(): array
+    {
+        return [
+            $this->postbackButton(self::BTN_SERVICE, 'act:find'),
+            $this->postbackButton(self::BTN_HOME, 'act:main'),
+        ];
+    }
+
+    /**
+     * @param  array<int, array{label: string, data: string}>  $options
+     * @return array<int, array<string, mixed>>
+     */
+    public function quickReplies(array $options, bool $includeBack = true): array
+    {
+        $replies = array_map(fn (array $option): array => [
+            'content_type' => 'text',
+            'title' => $this->fitText($option['label'], 20),
+            'payload' => $option['data'],
+        ], array_slice($options, 0, 13));
+
+        if ($includeBack) {
+            $replies[] = [
+                'content_type' => 'text',
+                'title' => $this->fitText(self::BTN_HOME, 20),
+                'payload' => 'act:main',
+            ];
+        }
+
+        return array_slice($replies, 0, 13);
+    }
+
+    public function postbackButton(string $title, string $payload): array
+    {
+        return [
+            'type' => 'postback',
+            'title' => $this->fitText($title, 20),
+            'payload' => $payload,
+        ];
+    }
+
+    public function webUrlButton(string $title, string $url): array
+    {
+        return [
+            'type' => 'web_url',
+            'title' => $this->fitText($title, 20),
+            'url' => $url,
+        ];
+    }
+
+    public function phoneNumberButton(string $title, string $phone): array
+    {
+        return [
+            'type' => 'phone_number',
+            'title' => $this->fitText($title, 20),
+            'payload' => $phone,
+        ];
+    }
+
+    public function categoryCallback(string $slug): string
+    {
+        return 'cat:'.$slug;
+    }
+
+    public function cityCallback(string $slug, string $city): string
+    {
+        return 'city:'.$slug.':'.base64_encode($city);
+    }
+
+    public function parseCityCallback(string $data): ?array
+    {
+        if (! str_starts_with($data, 'city:')) {
+            return null;
+        }
+
+        $parts = explode(':', $data, 3);
+
+        if (count($parts) !== 3) {
+            return null;
+        }
+
+        $decoded = base64_decode($parts[2], true);
+
+        return [
+            'slug' => $parts[1],
+            'city' => $decoded ?: $parts[2],
+        ];
+    }
+
+    private function fitText(string $text, int $maxLength): string
+    {
+        if (mb_strlen($text) <= $maxLength) {
+            return $text;
+        }
+
+        return mb_strimwidth($text, 0, max(1, $maxLength - 1), '…');
+    }
+}
