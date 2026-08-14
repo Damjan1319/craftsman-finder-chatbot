@@ -9,7 +9,7 @@ class MetaHttp
 {
     public static function client(): PendingRequest
     {
-        $client = Http::timeout(30);
+        $client = Http::timeout(15)->connectTimeout(5);
 
         if (! config('meta.verify_ssl')) {
             $client = $client->withoutVerifying();

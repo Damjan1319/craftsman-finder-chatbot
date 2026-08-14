@@ -31,15 +31,17 @@ class MetaWebhookController extends Controller
         $body = $request->all();
 
         if ($body !== []) {
-            try {
-                $handler->handleWebhook($body);
-            } catch (\Throwable $exception) {
-                Log::error('Meta webhook error', [
-                    'message' => $exception->getMessage(),
-                    'file' => $exception->getFile(),
-                    'line' => $exception->getLine(),
-                ]);
-            }
+            dispatch(function () use ($handler, $body): void {
+                try {
+                    $handler->handleWebhook($body);
+                } catch (\Throwable $exception) {
+                    Log::error('Meta webhook error', [
+                        'message' => $exception->getMessage(),
+                        'file' => $exception->getFile(),
+                        'line' => $exception->getLine(),
+                    ]);
+                }
+            })->afterResponse();
         }
 
         return response('EVENT_RECEIVED', 200);

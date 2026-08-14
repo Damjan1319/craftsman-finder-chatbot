@@ -63,8 +63,10 @@ class TelegramUser extends Model
 
     public function clearBotMessages(TelegramApiClient $api, int $chatId): void
     {
-        foreach ($this->bot_message_ids ?? [] as $messageId) {
-            $api->deleteMessage($chatId, (int) $messageId);
+        $ids = $this->bot_message_ids ?? [];
+
+        if ($ids !== []) {
+            $api->deleteMessages($chatId, $ids);
         }
 
         $this->bot_message_ids = null;

@@ -23,15 +23,17 @@ class TelegramWebhookController extends Controller
         $update = $request->all();
 
         if ($update !== []) {
-            try {
-                $handler->handle($update);
-            } catch (\Throwable $exception) {
-                Log::error('Telegram webhook error', [
-                    'message' => $exception->getMessage(),
-                    'file' => $exception->getFile(),
-                    'line' => $exception->getLine(),
-                ]);
-            }
+            dispatch(function () use ($handler, $update): void {
+                try {
+                    $handler->handle($update);
+                } catch (\Throwable $exception) {
+                    Log::error('Telegram webhook error', [
+                        'message' => $exception->getMessage(),
+                        'file' => $exception->getFile(),
+                        'line' => $exception->getLine(),
+                    ]);
+                }
+            })->afterResponse();
         }
 
         return response('', 200);

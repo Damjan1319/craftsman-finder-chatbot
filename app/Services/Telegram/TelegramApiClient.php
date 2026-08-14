@@ -2,6 +2,7 @@
 
 namespace App\Services\Telegram;
 
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class TelegramApiClient
@@ -47,6 +48,45 @@ class TelegramApiClient
             'chat_id' => $chatId,
             'message_id' => $messageId,
         ]) !== null;
+    }
+
+    /**
+     * @param  array<int, int>  $messageIds
+     */
+    public function deleteMessages(int $chatId, array $messageIds): void
+    {
+        $messageIds = array_values(array_unique(array_filter($messageIds)));
+
+        if ($messageIds === []) {
+            return;
+        }
+
+        if (count($messageIds) === 1) {
+            $this->deleteMessage($chatId, (int) $messageIds[0]);
+
+            return;
+        }
+
+        $token = config('telegram.bot_token');
+
+        if (blank($token)) {
+            return;
+        }
+
+        Http::pool(function ($pool) use ($messageIds, $chatId, $token) {
+            foreach ($messageIds as $index => $messageId) {
+                $request = $pool->as((string) $index)->timeout(15)->connectTimeout(5);
+
+                if (! config('telegram.verify_ssl')) {
+                    $request = $request->withoutVerifying();
+                }
+
+                $request->post("https://api.telegram.org/bot{$token}/deleteMessage", [
+                    'chat_id' => $chatId,
+                    'message_id' => (int) $messageId,
+                ]);
+            }
+        });
     }
 
     public function answerCallbackQuery(string $callbackQueryId, ?string $text = null, bool $showAlert = false): void

@@ -38,8 +38,8 @@ class ViberMessageBuilder
             'Type' => 'keyboard',
             'DefaultHeight' => false,
             'Buttons' => [
-                $this->replyButton('Tražim majstora', 'find_craftsman'),
-                $this->replyButton('O nama / Kontakt', 'about'),
+                $this->replyButton('Pronađi majstora', 'find_craftsman'),
+                $this->replyButton('O nama', 'about'),
             ],
         ];
     }
@@ -50,7 +50,7 @@ class ViberMessageBuilder
             'Type' => 'keyboard',
             'DefaultHeight' => false,
             'Buttons' => [
-                $this->replyButton('← Nazad', 'back_main'),
+                $this->replyButton('Početak', 'back_main'),
             ],
         ];
     }
@@ -67,7 +67,7 @@ class ViberMessageBuilder
         }
 
         if ($includeBack) {
-            $buttons[] = $this->replyButton('← Nazad', 'back_main');
+            $buttons[] = $this->replyButton('Početak', 'back_main');
         }
 
         return [
@@ -80,19 +80,32 @@ class ViberMessageBuilder
     /**
      * @param  \Illuminate\Support\Collection<int, \App\Models\Craftsman>  $craftsmen
      */
-    public function craftsmenCarousel($craftsmen): array
+    public function craftsmenCarousel($craftsmen, ?string $intro = null): array
     {
         $buttons = [];
+
+        if (filled($intro)) {
+            $buttons[] = [
+                'Columns' => 6,
+                'Rows' => 2,
+                'ActionType' => 'none',
+                'Text' => '<font color="#323232">'.e(str_replace("\n", '<br>', $intro)).'</font>',
+                'TextSize' => 'small',
+                'TextVAlign' => 'top',
+                'TextHAlign' => 'left',
+                'BgColor' => '#F3F4F6',
+            ];
+        }
 
         foreach ($craftsmen as $craftsman) {
             $buttons[] = [
                 'Columns' => 6,
                 'Rows' => 3,
                 'ActionType' => 'none',
-                'Text' => "<font color=\"#323232\"><b>{$craftsman->name}</b></font>"
+                'Text' => '<font color="#323232"><b>'.e($craftsman->name).'</b></font>'
                     .($craftsman->is_premium ? '<br><font color="#B45309"><b>Preporučeno</b></font>' : '')
-                    ."<br><br>{$craftsman->city}"
-                    .'<br>'.str($craftsman->bio)->limit(80),
+                    .'<br><br>📍 '.e($craftsman->city)
+                    .'<br>'.e((string) str($craftsman->bio)->limit(80)),
                 'TextSize' => 'medium',
                 'TextVAlign' => 'top',
                 'TextHAlign' => 'left',
@@ -103,7 +116,7 @@ class ViberMessageBuilder
                 'Rows' => 1,
                 'ActionType' => 'open-url',
                 'ActionBody' => 'tel:'.$craftsman->phone,
-                'Text' => '📞 Pozovi odmah',
+                'Text' => '📞 Pozovi',
                 'TextSize' => 'regular',
                 'BgColor' => '#7360F2',
                 'TextVAlign' => 'middle',
@@ -116,7 +129,7 @@ class ViberMessageBuilder
                     'Rows' => 1,
                     'ActionType' => 'open-url',
                     'ActionBody' => 'viber://chat?number='.urlencode($craftsman->viber_id),
-                    'Text' => '💬 Pošalji Viber poruku',
+                    'Text' => '💬 Viber poruka',
                     'TextSize' => 'regular',
                     'BgColor' => '#665CAC',
                     'TextVAlign' => 'middle',

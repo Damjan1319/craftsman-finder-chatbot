@@ -2,69 +2,138 @@
 
 namespace App\Services\Telegram;
 
+use App\Models\Craftsman;
+use App\Services\Bot\BotCopy;
+
 class TelegramMessageFormatter
 {
-    public function home(string $welcome): string
+    public function __construct(
+        private readonly BotCopy $copy,
+    ) {}
+
+    public function home(string $welcome, int $categoryCount): string
     {
-        return "<b>Majstori</b>\n".e($welcome);
+        return $this->toHtml($this->copy->home($welcome, $categoryCount));
     }
 
-    /**
-     * @param  array<int, string>  $names
-     */
-    public function categories(array $names): string
+    public function categories(int $count): string
     {
-        $lines = ['<b>Kategorije</b>'];
-        $hasLongName = collect($names)->contains(fn (string $name) => mb_strlen($name) > 30);
-
-        if ($hasLongName) {
-            $lines[] = '';
-
-            foreach ($names as $name) {
-                $lines[] = e($name);
-            }
-        }
-
-        return implode("\n", $lines);
+        return $this->toHtml($this->copy->categories($count));
     }
 
-    public function cities(string $categoryName): string
+    public function cities(string $categoryName, int $count): string
     {
-        return '<b>'.e($categoryName).'</b>';
+        return $this->toHtml($this->copy->cities($categoryName, $count));
+    }
+
+    public function craftsmen(string $categoryName, string $city, int $count): string
+    {
+        return $this->toHtml($this->copy->craftsmen($categoryName, $city, $count));
+    }
+
+    public function categoriesForCity(string $city, int $count): string
+    {
+        return $this->toHtml($this->copy->categoriesForCity($city, $count));
     }
 
     public function about(string $about, ?string $phone, ?string $email): string
     {
-        $lines = [
-            '<b>O nama</b>',
-            '',
-            e($about),
-        ];
+        $text = $this->copy->about($about, $phone, $email);
+        $lines = explode("\n", $text);
+        $html = [];
 
-        if (filled($phone)) {
-            $lines[] = '';
-            $lines[] = '<code>'.e($phone).'</code>';
+        foreach ($lines as $index => $line) {
+            if ($index === 0 || in_array($line, ['O nama', 'Kontakt'], true)) {
+                $html[] = '<b>'.e($line).'</b>';
+
+                continue;
+            }
+
+            if (str_starts_with($line, 'Tel:')) {
+                $html[] = '📞 <code>'.e(trim(substr($line, 4))).'</code>';
+
+                continue;
+            }
+
+            if (str_starts_with($line, 'Email:')) {
+                $html[] = '✉️ '.e(trim(substr($line, 6)));
+
+                continue;
+            }
+
+            $html[] = e($line);
         }
 
-        if (filled($email)) {
-            $lines[] = e($email);
-        }
-
-        return implode("\n", $lines);
+        return implode("\n", $html);
     }
 
     public function emptyCategories(): string
     {
-        return '<b>Majstori</b>';
+        return $this->toHtml($this->copy->emptyCategories());
     }
 
     public function emptyCities(string $categoryName): string
     {
-        return '<b>'.e($categoryName).'</b>';
+        return $this->toHtml($this->copy->emptyCities($categoryName));
     }
 
     public function emptyCraftsmen(string $categoryName, string $city): string
     {
-        return '<b>'.e($categoryName).'</b> · '.e($city);
+        return $this->toHtml($this->copy->emptyCraftsmen($categoryName, $city));
+    }
+
+    public function emptyCity(string $city): string
+    {
+        return $this->toHtml($this->copy->emptyCity($city));
+    }
+
+    public function notUnderstood(): string
+    {
+        return $this->toHtml($this->copy->notUnderstood());
+    }
+
+    public function footerPrompt(): string
+    {
+        return $this->toHtml($this->copy->footerPrompt());
+    }
+
+    public function craftsmanCard(Craftsman $craftsman, bool $featured): string
+    {
+        $lines = ['<b>'.e($craftsman->name).'</b>'];
+
+        if ($featured) {
+            $lines[] = '⭐ <i>Preporučeno</i>';
+        }
+
+        $lines[] = '';
+        $lines[] = '📍 '.e($craftsman->city);
+
+        if (filled($craftsman->bio)) {
+            $lines[] = '';
+            $lines[] = e((string) str($craftsman->bio)->limit(160));
+        }
+
+        $lines[] = '';
+        $lines[] = '📞 <code>'.e($craftsman->phone).'</code>';
+
+        return implode("\n", $lines);
+    }
+
+    private function toHtml(string $text): string
+    {
+        $lines = explode("\n", $text);
+        $html = [];
+
+        foreach ($lines as $index => $line) {
+            if ($index === 0) {
+                $html[] = '<b>'.e($line).'</b>';
+
+                continue;
+            }
+
+            $html[] = e($line);
+        }
+
+        return implode("\n", $html);
     }
 }

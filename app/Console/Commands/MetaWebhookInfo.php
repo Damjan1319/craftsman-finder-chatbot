@@ -2,16 +2,18 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Meta\MetaApiClient;
 use Illuminate\Console\Command;
 
 class MetaWebhookInfo extends Command
 {
     protected $signature = 'meta:webhook-info
-                            {url? : HTTPS URL (npr. https://abc.ngrok.io/api/meta/webhook)}';
+                            {url? : HTTPS URL (npr. https://abc.ngrok.io/api/meta/webhook)}
+                            {--setup : Podesi Get Started dugme na Messenger profilu}';
 
     protected $description = 'Prikazuje Meta webhook podešavanja za Messenger i Instagram';
 
-    public function handle(): int
+    public function handle(MetaApiClient $api): int
     {
         $url = $this->argument('url') ?: rtrim((string) config('app.url'), '/').'/api/meta/webhook';
         $verifyToken = config('meta.verify_token');
@@ -28,6 +30,7 @@ class MetaWebhookInfo extends Command
         $this->line('   - Callback URL: '.$url);
         $this->line('   - Verify Token: '.$verifyToken);
         $this->line('   - Subscribe: messages, messaging_postbacks');
+        $this->warn('   VAŽNO: mora biti čekirano messaging_postbacks (inače klik na dugmad ne radi!)');
         $this->line('3. Instagram → Webhooks (ili API setup) → isti Callback URL');
         $this->line('   - Subscribe: messages, messaging_postbacks');
         $this->newLine();
@@ -42,6 +45,14 @@ class MetaWebhookInfo extends Command
             $this->warn('MESSENGER_PAGE_ACCESS_TOKEN nije postavljen — Messenger neće slati odgovore');
         } else {
             $this->info('MESSENGER_PAGE_ACCESS_TOKEN: OK');
+
+            if ($this->option('setup')) {
+                if ($api->setMessengerGetStarted()) {
+                    $this->info('Get Started dugme je postavljeno na Messenger profilu.');
+                } else {
+                    $this->error('Get Started setup nije uspeo — proveri log.');
+                }
+            }
         }
 
         if (blank(config('instagram.access_token'))) {
@@ -58,7 +69,7 @@ class MetaWebhookInfo extends Command
         $this->line('Lokalni test:');
         $this->line('  php artisan serve');
         $this->line('  ngrok http 8000');
-        $this->line('  php artisan meta:webhook-info https://TVOJ-NGROK.ngrok-free.app/api/meta/webhook');
+        $this->line('  php artisan meta:webhook-info https://TVOJ-NGROK.ngrok-free.app/api/meta/webhook --setup');
 
         return self::SUCCESS;
     }

@@ -7,6 +7,6 @@ return [
     'skip_signature' => env('VIBER_SKIP_SIGNATURE', env('APP_ENV') === 'local'),
     'welcome_message' => env(
         'VIBER_WELCOME_MESSAGE',
-        'Dobrodošli! Pronađite proverene majstore u vašem gradu brzo i lako.'
+        'Pronađite proverene majstore u vašem gradu — brzo i jednostavno.'
     ),
 ];

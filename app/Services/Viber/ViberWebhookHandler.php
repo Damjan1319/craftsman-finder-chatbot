@@ -6,12 +6,18 @@ use App\Models\Category;
 use App\Models\Craftsman;
 use App\Models\Setting;
 use App\Models\ViberUser;
+use App\Services\Bot\BotCopy;
+use App\Services\Bot\BotCatalog;
+use App\Services\Search\CraftsmanSearchService;
 use Illuminate\Support\Collection;
 
 class ViberWebhookHandler
 {
     public function __construct(
         private readonly ViberMessageBuilder $messages,
+        private readonly CraftsmanSearchService $search,
+        private readonly BotCopy $copy,
+        private readonly BotCatalog $catalog,
     ) {}
 
     public function handle(array $payload): array
@@ -31,10 +37,7 @@ class ViberWebhookHandler
             ViberUser::touchFromPayload($payload['user']);
         }
 
-        return $this->messages->text(
-            config('viber.welcome_message'),
-            $this->messages->mainKeyboard(),
-        );
+        return $this->showMainMenu();
     }
 
     private function handleMessage(array $payload): array
@@ -71,32 +74,27 @@ class ViberWebhookHandler
 
     private function showMainMenu(): array
     {
+        $categoryCount = $this->catalog->categoriesWithCounts()->count();
+
         return $this->messages->text(
-            'Izaberite opciju:',
+            $this->copy->home(config('viber.welcome_message'), $categoryCount),
             $this->messages->mainKeyboard(),
         );
     }
 
     private function showCategories(): array
     {
-        $categories = Category::query()
-            ->active()
-            ->withCount(['craftsmen as active_craftsmen_count' => fn ($query) => $query->active()])
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get()
-            ->filter(fn (Category $category) => $category->active_craftsmen_count > 0)
-            ->values();
+        $categories = $this->catalog->categoriesWithCounts();
 
         if ($categories->isEmpty()) {
             return $this->messages->text(
-                'Trenutno nema dostupnih kategorija. Pokušajte kasnije.',
+                $this->copy->emptyCategories(),
                 $this->messages->mainKeyboard(),
             );
         }
 
         $options = $categories->map(fn (Category $category) => [
-            'label' => $category->labelWithCount(),
+            'label' => $category->name,
             'tracking' => [
                 'action' => 'category',
                 'slug' => $category->slug,
@@ -104,7 +102,7 @@ class ViberWebhookHandler
         ])->all();
 
         return $this->messages->text(
-            'Izaberite kategoriju majstora:',
+            $this->copy->categories($categories->count()),
             $this->messages->optionsKeyboard($options),
         );
     }
@@ -117,17 +115,11 @@ class ViberWebhookHandler
             return $this->showCategories();
         }
 
-        $cities = Craftsman::query()
-            ->where('category_id', $category->id)
-            ->active()
-            ->select('city')
-            ->distinct()
-            ->orderBy('city')
-            ->pluck('city');
+        $cities = $this->catalog->citiesForCategory($category->id);
 
         if ($cities->isEmpty()) {
             return $this->messages->text(
-                "Trenutno nema aktivnih majstora za kategoriju {$category->name}.",
+                $this->copy->emptyCities($category->name),
                 $this->messages->backKeyboard(),
             );
         }
@@ -142,7 +134,7 @@ class ViberWebhookHandler
         ])->all();
 
         return $this->messages->text(
-            "Izaberite grad za kategoriju {$category->name}:",
+            $this->copy->cities($category->name, $cities->count()),
             $this->messages->optionsKeyboard($options),
         );
     }
@@ -162,35 +154,28 @@ class ViberWebhookHandler
 
         if ($craftsmen->isEmpty()) {
             return $this->messages->text(
-                "Nema aktivnih majstora za {$category->name} u gradu {$city}.",
+                $this->copy->emptyCraftsmen($category->name, $city),
                 $this->messages->backKeyboard(),
             );
         }
 
         return $this->messages->richMedia(
-            $this->messages->craftsmenCarousel($craftsmen),
+            $this->messages->craftsmenCarousel(
+                $craftsmen,
+                $this->copy->craftsmen($category->name, $city, $craftsmen->count()),
+            ),
             $this->messages->backKeyboard(),
         );
     }
 
     private function showAbout(): array
     {
-        $about = Setting::get('about_text', 'Platforma za pronalaženje proverenih majstora.');
-        $phone = Setting::get('contact_phone');
-        $email = Setting::get('contact_email');
-
-        $lines = [$about];
-
-        if (filled($phone)) {
-            $lines[] = "Telefon: {$phone}";
-        }
-
-        if (filled($email)) {
-            $lines[] = "Email: {$email}";
-        }
-
         return $this->messages->text(
-            implode("\n\n", $lines),
+            $this->copy->about(
+                Setting::get('about_text', 'Platforma za pronalaženje proverenih majstora.'),
+                Setting::get('contact_phone'),
+                Setting::get('contact_email'),
+            ),
             $this->messages->mainKeyboard(),
         );
     }
@@ -198,13 +183,59 @@ class ViberWebhookHandler
     private function handleFallbackText(string $text): array
     {
         return match ($text) {
-            'Tražim majstora' => $this->showCategories(),
-            'O nama / Kontakt' => $this->showAbout(),
-            '← Nazad' => $this->showMainMenu(),
-            default => $this->messages->text(
-                'Nisam razumeo. Koristite dugmad ispod.',
-                $this->messages->mainKeyboard(),
-            ),
+            'Tražim majstora', 'Pronađi majstora' => $this->showCategories(),
+            'O nama / Kontakt', 'O nama' => $this->showAbout(),
+            '← Nazad', 'Početak' => $this->showMainMenu(),
+            default => $this->handleFreeText($text),
         };
+    }
+
+    private function handleFreeText(string $text): array
+    {
+        $parsed = $this->search->parse($text);
+
+        if ($parsed !== null) {
+            if ($parsed->isComplete()) {
+                return $this->showCraftsmen($parsed->category->slug, $parsed->city);
+            }
+
+            if ($parsed->category !== null) {
+                return $this->showCities($parsed->category->slug);
+            }
+
+            if ($parsed->city !== null) {
+                return $this->showCategoriesForCity($parsed->city);
+            }
+        }
+
+        return $this->messages->text(
+            $this->copy->notUnderstood(),
+            $this->messages->mainKeyboard(),
+        );
+    }
+
+    private function showCategoriesForCity(string $city): array
+    {
+        $categories = $this->search->categoriesInCity($city);
+
+        if ($categories->isEmpty()) {
+            return $this->messages->text(
+                $this->copy->emptyCity($city),
+                $this->messages->backKeyboard(),
+            );
+        }
+
+        $options = $categories->map(fn (Category $category) => [
+            'label' => $category->name,
+            'tracking' => [
+                'action' => 'category',
+                'slug' => $category->slug,
+            ],
+        ])->all();
+
+        return $this->messages->text(
+            $this->copy->categoriesForCity($city, $categories->count()),
+            $this->messages->optionsKeyboard($options),
+        );
     }
 }

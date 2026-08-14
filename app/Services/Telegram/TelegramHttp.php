@@ -9,7 +9,7 @@ class TelegramHttp
 {
     public static function client(): PendingRequest
     {
-        $client = Http::timeout(30);
+        $client = Http::timeout(15)->connectTimeout(5);
 
         if (! config('telegram.verify_ssl')) {
             $client = $client->withoutVerifying();

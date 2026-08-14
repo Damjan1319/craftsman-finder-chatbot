@@ -6,6 +6,8 @@ class MetaPayloadBuilder
 {
     public const BTN_SERVICE = 'Izaberi uslugu';
 
+    public const BTN_NEW_SEARCH = 'Nova pretraga';
+
     public const BTN_HOME = 'Početak';
 
     public const BTN_ABOUT = 'O nama';
@@ -26,12 +28,11 @@ class MetaPayloadBuilder
         ];
     }
 
-    public function craftsmenFooterButtons(): array
+    public function craftsmenFooterQuickReplies(): array
     {
-        return [
-            $this->postbackButton(self::BTN_SERVICE, 'act:find'),
-            $this->postbackButton(self::BTN_HOME, 'act:main'),
-        ];
+        return $this->quickReplies([
+            ['label' => self::BTN_NEW_SEARCH, 'data' => 'act:find'],
+        ], true);
     }
 
     /**

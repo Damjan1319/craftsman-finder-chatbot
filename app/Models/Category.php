@@ -29,6 +29,9 @@ class Category extends Model
                 $category->slug = Str::slug($category->name);
             }
         });
+
+        static::saved(fn () => \App\Services\Bot\BotCatalog::flush());
+        static::deleted(fn () => \App\Services\Bot\BotCatalog::flush());
     }
 
     public function craftsmen(): HasMany

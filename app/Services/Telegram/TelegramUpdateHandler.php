@@ -8,6 +8,8 @@ use App\Models\Setting;
 use App\Models\TelegramUser;
 use App\Models\UsageEvent;
 use App\Services\Analytics\UsageTracker;
+use App\Services\Bot\BotCatalog;
+use App\Services\Search\CraftsmanSearchService;
 use Illuminate\Support\Collection;
 
 class TelegramUpdateHandler
@@ -17,6 +19,8 @@ class TelegramUpdateHandler
         private readonly TelegramKeyboardBuilder $keyboard,
         private readonly TelegramMessageFormatter $messages,
         private readonly UsageTracker $tracker,
+        private readonly CraftsmanSearchService $search,
+        private readonly BotCatalog $catalog,
     ) {}
 
     public function handle(array $update): void
@@ -74,7 +78,76 @@ class TelegramUpdateHandler
             return;
         }
 
-        $this->showMainMenu($chatId, $user, null, true);
+        if ($this->tryHandleSearch($chatId, $text, $user)) {
+            return;
+        }
+
+        $this->replaceScreen(
+            $chatId,
+            $user,
+            null,
+            $this->messages->notUnderstood(),
+            $this->keyboard->backMenu(),
+        );
+    }
+
+    private function tryHandleSearch(int $chatId, string $text, TelegramUser $user): bool
+    {
+        $parsed = $this->search->parse($text);
+
+        if ($parsed === null) {
+            return false;
+        }
+
+        if ($parsed->isComplete()) {
+            $this->showCraftsmen($chatId, $parsed->category->slug, $parsed->city, $user);
+
+            return true;
+        }
+
+        if ($parsed->category !== null) {
+            $this->showCities($chatId, $parsed->category->slug, $user);
+
+            return true;
+        }
+
+        if ($parsed->city !== null) {
+            $this->showCategoriesForCity($chatId, $parsed->city, $user);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private function showCategoriesForCity(int $chatId, string $city, TelegramUser $user, ?int $messageId = null): void
+    {
+        $categories = $this->search->categoriesInCity($city);
+
+        if ($categories->isEmpty()) {
+            $this->replaceScreen(
+                $chatId,
+                $user,
+                $messageId,
+                $this->messages->emptyCity($city),
+                $this->keyboard->backMenu(),
+            );
+
+            return;
+        }
+
+        $options = $categories->map(fn (Category $category) => [
+            'label' => $category->name,
+            'data' => $this->keyboard->categoryCallback($category->slug),
+        ])->all();
+
+        $this->replaceScreen(
+            $chatId,
+            $user,
+            $messageId,
+            $this->messages->categoriesForCity($city, $categories->count()),
+            $this->keyboard->optionsMenu($options),
+        );
     }
 
     private function handleCallbackQuery(array $callbackQuery): void
@@ -183,7 +256,9 @@ class TelegramUpdateHandler
 
     private function showMainMenu(int $chatId, TelegramUser $user, ?int $messageId = null, bool $resetChat = false): void
     {
-        $text = $this->messages->home(config('telegram.welcome_message'));
+        $categoryCount = $this->catalog->categoriesWithCounts()->count();
+
+        $text = $this->messages->home(config('telegram.welcome_message'), $categoryCount);
 
         if ($resetChat || $messageId === null) {
             $user->clearBotMessages($this->api, $chatId);
@@ -213,14 +288,7 @@ class TelegramUpdateHandler
 
     private function showCategories(int $chatId, TelegramUser $user, ?int $messageId = null): void
     {
-        $categories = Category::query()
-            ->active()
-            ->withCount(['craftsmen as active_craftsmen_count' => fn ($query) => $query->active()])
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get()
-            ->filter(fn (Category $category) => $category->active_craftsmen_count > 0)
-            ->values();
+        $categories = $this->catalog->categoriesWithCounts();
 
         if ($categories->isEmpty()) {
             $this->replaceScreen(
@@ -250,7 +318,7 @@ class TelegramUpdateHandler
             $chatId,
             $user,
             $messageId,
-            $this->messages->categories($categories->pluck('name')->all()),
+            $this->messages->categories($categories->count()),
             $this->keyboard->optionsMenu($options),
         );
     }
@@ -265,13 +333,7 @@ class TelegramUpdateHandler
             return;
         }
 
-        $cities = Craftsman::query()
-            ->where('category_id', $category->id)
-            ->active()
-            ->select('city')
-            ->distinct()
-            ->orderBy('city')
-            ->pluck('city');
+        $cities = $this->catalog->citiesForCategory($category->id);
 
         if ($cities->isEmpty()) {
             $this->replaceScreen(
@@ -302,7 +364,7 @@ class TelegramUpdateHandler
             $chatId,
             $user,
             $messageId,
-            $this->messages->cities($category->name),
+            $this->messages->cities($category->name, $cities->count()),
             $this->keyboard->optionsMenu($options),
         );
     }
@@ -342,90 +404,42 @@ class TelegramUpdateHandler
             ['category' => $category->slug, 'city' => $city],
         );
 
-        $recommended = $craftsmen->where('is_premium', true)->values();
-        $others = $craftsmen->where('is_premium', false)->values();
+        $lines = [$this->messages->craftsmen($category->name, $city, $craftsmen->count())];
+        $keyboard = [];
+
+        foreach ($craftsmen as $craftsman) {
+            $lines[] = '';
+            $lines[] = $this->messages->craftsmanCard($craftsman, $craftsman->is_premium);
+
+            $row = [
+                ['text' => '📞 Pozovi', 'callback_data' => 'phone:'.$craftsman->id],
+            ];
+
+            if (filled($craftsman->viber_id)) {
+                $row[] = [
+                    'text' => 'Viber',
+                    'url' => 'https://viber.com/chat?number='.urlencode(ltrim($craftsman->viber_id, '+')),
+                ];
+            }
+
+            $keyboard[] = $row;
+        }
+
+        $keyboard[] = [
+            ['text' => TelegramKeyboardBuilder::BTN_NEW_SEARCH, 'callback_data' => 'act:find'],
+            ['text' => TelegramKeyboardBuilder::BTN_HOME, 'callback_data' => 'act:main'],
+        ];
 
         $user->clearBotMessages($this->api, $chatId);
         $user->refresh();
 
-        $sentMessageIds = [];
+        $messageId = $this->api->sendMessage($chatId, implode("\n", $lines), [
+            'inline_keyboard' => $keyboard,
+        ]);
 
-        foreach ($recommended as $craftsman) {
-            $cardId = $this->sendCraftsmanCard($chatId, $craftsman, true);
-
-            if ($cardId !== null) {
-                $sentMessageIds[] = $cardId;
-            }
+        if ($messageId !== null) {
+            $user->rememberBotMessages([$messageId]);
         }
-
-        foreach ($others as $craftsman) {
-            $cardId = $this->sendCraftsmanCard($chatId, $craftsman, false);
-
-            if ($cardId !== null) {
-                $sentMessageIds[] = $cardId;
-            }
-        }
-
-        $footerId = $this->api->sendMessage(
-            $chatId,
-            ' ',
-            $this->keyboard->craftsmenFooterMenu(),
-        );
-
-        if ($footerId !== null) {
-            $sentMessageIds[] = $footerId;
-        }
-
-        $user->rememberBotMessages($sentMessageIds);
-    }
-
-    private function sendCraftsmanCard(int $chatId, Craftsman $craftsman, bool $featured): ?int
-    {
-        $contactRow = [
-            ['text' => 'Pozovi', 'callback_data' => 'phone:'.$craftsman->id],
-        ];
-
-        if (filled($craftsman->viber_id)) {
-            $contactRow[] = [
-                'text' => 'Viber',
-                'url' => 'https://viber.com/chat?number='.urlencode(ltrim($craftsman->viber_id, '+')),
-            ];
-        }
-
-        return $this->api->sendMessage(
-            $chatId,
-            $this->formatCraftsmanMessage($craftsman, $featured),
-            [
-                'inline_keyboard' => [
-                    $contactRow,
-                    [['text' => TelegramKeyboardBuilder::BTN_HOME, 'callback_data' => 'act:main']],
-                ],
-            ],
-        );
-    }
-
-    private function formatCraftsmanMessage(Craftsman $craftsman, bool $featured = false): string
-    {
-        $lines = [];
-
-        if ($featured) {
-            $lines[] = '<b>'.e($craftsman->name).'</b>';
-            $lines[] = '<i>Preporučeno</i>';
-        } else {
-            $lines[] = '<b>'.e($craftsman->name).'</b>';
-        }
-
-        $lines[] = '';
-        $lines[] = 'Grad: '.e($craftsman->city);
-
-        if (filled($craftsman->bio)) {
-            $lines[] = '';
-            $lines[] = '„'.e((string) str($craftsman->bio)->limit(180)).'”';
-        }
-
-        $lines[] = '<code>'.e($craftsman->phone).'</code>';
-
-        return implode("\n", $lines);
     }
 
     private function shouldResetChat(TelegramUser $user): bool

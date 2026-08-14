@@ -29,6 +29,12 @@ class Craftsman extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::saved(fn () => \App\Services\Bot\BotCatalog::flush());
+        static::deleted(fn () => \App\Services\Bot\BotCatalog::flush());
+    }
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);

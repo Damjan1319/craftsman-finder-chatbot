@@ -2,87 +2,82 @@
 
 namespace App\Services\Meta;
 
+use App\Models\Craftsman;
+use App\Services\Bot\BotCopy;
+
 class MetaMessageFormatter
 {
-    public function home(string $welcome): string
+    public function __construct(
+        private readonly BotCopy $copy,
+    ) {}
+
+    public function home(string $welcome, int $categoryCount): string
     {
-        return "Majstori\n{$welcome}";
+        return $this->copy->home($welcome, $categoryCount);
     }
 
-    /**
-     * @param  array<int, string>  $names
-     */
-    public function categories(array $names): string
+    public function categories(int $count): string
     {
-        $lines = ['Kategorije', '', 'Izaberite kategoriju ispod:'];
-
-        if ($names !== []) {
-            foreach ($names as $name) {
-                $lines[] = "• {$name}";
-            }
-        }
-
-        return implode("\n", $lines);
+        return $this->copy->categories($count);
     }
 
-    public function cities(string $categoryName): string
+    public function cities(string $categoryName, int $count): string
     {
-        return "{$categoryName}\n\nIzaberite grad:";
+        return $this->copy->cities($categoryName, $count);
+    }
+
+    public function craftsmen(string $categoryName, string $city, int $count): string
+    {
+        return $this->copy->craftsmen($categoryName, $city, $count);
+    }
+
+    public function categoriesForCity(string $city, int $count): string
+    {
+        return $this->copy->categoriesForCity($city, $count);
     }
 
     public function about(string $about, ?string $phone, ?string $email): string
     {
-        $lines = [
-            'O nama',
-            '',
-            $about,
-        ];
-
-        if (filled($phone)) {
-            $lines[] = '';
-            $lines[] = $phone;
-        }
-
-        if (filled($email)) {
-            $lines[] = $email;
-        }
-
-        return implode("\n", $lines);
+        return $this->copy->about($about, $phone, $email);
     }
 
     public function emptyCategories(): string
     {
-        return 'Trenutno nema dostupnih kategorija.';
+        return $this->copy->emptyCategories();
     }
 
     public function emptyCities(string $categoryName): string
     {
-        return "Nema majstora u kategoriji {$categoryName}.";
+        return $this->copy->emptyCities($categoryName);
     }
 
     public function emptyCraftsmen(string $categoryName, string $city): string
     {
-        return "Nema majstora za {$categoryName} u gradu {$city}.";
+        return $this->copy->emptyCraftsmen($categoryName, $city);
     }
 
-    public function craftsmanCard(\App\Models\Craftsman $craftsman, bool $featured): string
+    public function emptyCity(string $city): string
     {
-        $lines = [];
+        return $this->copy->emptyCity($city);
+    }
 
-        if ($featured) {
-            $lines[] = "⭐ {$craftsman->name} (Preporučeno)";
-        } else {
-            $lines[] = $craftsman->name;
-        }
+    public function moreOptions(): string
+    {
+        return $this->copy->moreOptions();
+    }
 
-        $lines[] = "Grad: {$craftsman->city}";
+    public function footerPrompt(): string
+    {
+        return $this->copy->footerPrompt();
+    }
 
-        if (filled($craftsman->bio)) {
-            $lines[] = (string) str($craftsman->bio)->limit(180);
-        }
+    public function notUnderstood(): string
+    {
+        return $this->copy->notUnderstood();
+    }
 
-        $lines[] = "Tel: {$craftsman->phone}";
-
-        return implode("\n", $lines);
+    public function craftsmanCard(Craftsman $craftsman, bool $featured): string
+    {
+        return $this->copy->craftsmanSubtitle($craftsman, $featured);
     }
 }

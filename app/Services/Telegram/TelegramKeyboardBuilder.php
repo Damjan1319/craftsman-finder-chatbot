@@ -6,6 +6,8 @@ class TelegramKeyboardBuilder
 {
     public const BTN_SERVICE = 'Izaberi uslugu';
 
+    public const BTN_NEW_SEARCH = 'Nova pretraga';
+
     public const BTN_HOME = 'Početak';
 
     public const BTN_ABOUT = 'O nama';
@@ -56,7 +58,7 @@ class TelegramKeyboardBuilder
         return [
             'inline_keyboard' => [
                 [
-                    ['text' => self::BTN_SERVICE, 'callback_data' => 'act:find'],
+                    ['text' => self::BTN_NEW_SEARCH, 'callback_data' => 'act:find'],
                     ['text' => self::BTN_HOME, 'callback_data' => 'act:main'],
                 ],
             ],
