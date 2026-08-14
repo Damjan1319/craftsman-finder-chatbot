@@ -1,4 +1,5 @@
 /node_modules
+/vendor
 /tests
 /.git
 /.github
