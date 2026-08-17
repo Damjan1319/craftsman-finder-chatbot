@@ -18,6 +18,28 @@ class MetaApiClient
         return $this->send($recipientId, $message, $platform);
     }
 
+    public function sendTypingOn(string $recipientId, string $platform): void
+    {
+        $this->sendSenderAction($recipientId, 'typing_on', $platform);
+    }
+
+    public function sendSenderAction(string $recipientId, string $action, string $platform): void
+    {
+        $token = $this->accessToken($platform);
+
+        if (blank($token)) {
+            return;
+        }
+
+        $version = config('meta.graph_version');
+
+        MetaHttp::client()->post("https://graph.facebook.com/{$version}/me/messages", [
+            'access_token' => $token,
+            'recipient' => ['id' => $recipientId],
+            'sender_action' => $action,
+        ]);
+    }
+
     /**
      * @param  array<int, array<string, mixed>>  $messages
      */
@@ -33,41 +55,11 @@ class MetaApiClient
             return;
         }
 
-        $token = $this->accessToken($platform);
-
-        if (blank($token)) {
-            Log::warning("Meta access token missing for platform: {$platform}");
-
-            return;
-        }
-
-        $version = config('meta.graph_version');
-        $url = "https://graph.facebook.com/{$version}/me/messages";
-
-        $responses = Http::pool(function ($pool) use ($messages, $url, $token, $recipientId) {
-            foreach ($messages as $index => $message) {
-                $request = $pool->as((string) $index)->timeout(15)->connectTimeout(5);
-
-                if (! config('meta.verify_ssl', true)) {
-                    $request = $request->withoutVerifying();
-                }
-
-                $request->post($url, [
-                    'access_token' => $token,
-                    'recipient' => ['id' => $recipientId],
-                    'messaging_type' => 'RESPONSE',
-                    'message' => $message,
-                ]);
-            }
-        });
-
-        foreach ($responses as $index => $response) {
-            if (! $response->successful()) {
-                Log::error('Meta Send API batch error', [
+        foreach ($messages as $index => $message) {
+            if (! $this->send($recipientId, $message, $platform)) {
+                Log::error('Meta Send API sequential error', [
                     'platform' => $platform,
                     'index' => $index,
-                    'status' => $response->status(),
-                    'response' => $response->json(),
                 ]);
             }
         }
@@ -108,21 +100,48 @@ class MetaApiClient
 
     public function setMessengerGetStarted(string $platform = 'messenger'): bool
     {
+        return $this->configureMessengerProfile($platform);
+    }
+
+    public function configureMessengerProfile(string $platform = 'messenger'): bool
+    {
         $token = $this->accessToken($platform);
 
         if (blank($token)) {
-            Log::warning("Meta access token missing for get_started setup: {$platform}");
+            Log::warning("Meta access token missing for messenger profile setup: {$platform}");
 
             return false;
         }
 
+        $greeting = (string) config('messenger.greeting_message');
         $version = config('meta.graph_version');
-        $response = MetaHttp::client()->post("https://graph.facebook.com/{$version}/me/messenger_profile", [
+
+        $this->clearMessengerProfileExtras($token, $version);
+
+        $payload = [
             'access_token' => $token,
             'get_started' => [
                 'payload' => 'GET_STARTED',
             ],
-        ]);
+            'greeting' => [
+                [
+                    'locale' => 'default',
+                    'text' => mb_substr($greeting, 0, 160),
+                ],
+            ],
+            'ice_breakers' => [
+                [
+                    'question' => 'Tražim majstora',
+                    'payload' => 'GET_STARTED',
+                ],
+                [
+                    'question' => 'O nama',
+                    'payload' => 'act:about',
+                ],
+            ],
+        ];
+
+        $response = MetaHttp::client()->post("https://graph.facebook.com/{$version}/me/messenger_profile", $payload);
 
         if (! $response->successful()) {
             Log::error('Meta messenger_profile error', [
@@ -135,6 +154,20 @@ class MetaApiClient
         }
 
         return true;
+    }
+
+    private function clearMessengerProfileExtras(string $token, string $version): void
+    {
+        $response = MetaHttp::client()
+            ->withBody(json_encode(['fields' => ['persistent_menu']]), 'application/json')
+            ->delete("https://graph.facebook.com/{$version}/me/messenger_profile?access_token={$token}");
+
+        if (! $response->successful() && $response->status() !== 404) {
+            Log::warning('Meta messenger_profile cleanup warning', [
+                'status' => $response->status(),
+                'response' => $response->json(),
+            ]);
+        }
     }
 
     /**
@@ -159,11 +192,24 @@ class MetaApiClient
         ]);
 
         if (! $response->successful()) {
+            $json = $response->json();
+
             Log::error('Meta Send API error', [
                 'platform' => $platform,
+                'recipient_id' => $recipientId,
                 'status' => $response->status(),
-                'response' => $response->json(),
+                'response' => $json,
             ]);
+
+            $message = data_get($json, 'error.message', '');
+
+            if (str_contains($message, 'outside of allowed window')
+                || str_contains($message, 'Cannot message users')
+                || data_get($json, 'error.code') === 10) {
+                Log::warning('Meta Send API: korisnik nema dozvolu — proveri da li je aplikacija u Live modu', [
+                    'recipient_id' => $recipientId,
+                ]);
+            }
 
             return false;
         }

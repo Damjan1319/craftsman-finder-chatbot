@@ -104,7 +104,7 @@ class ViberMessageBuilder
                 'ActionType' => 'none',
                 'Text' => '<font color="#323232"><b>'.e($craftsman->name).'</b></font>'
                     .($craftsman->is_premium ? '<br><font color="#B45309"><b>Preporučeno</b></font>' : '')
-                    .'<br><br>📍 '.e($craftsman->city)
+                    .'<br><br>'.e($craftsman->city)
                     .'<br>'.e((string) str($craftsman->bio)->limit(80)),
                 'TextSize' => 'medium',
                 'TextVAlign' => 'top',

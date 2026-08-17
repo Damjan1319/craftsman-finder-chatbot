@@ -1,8 +1,8 @@
 @extends('layouts.app')
 
 @section('title', 'Početna')
-@section('heading', 'Majstori')
-@section('subheading', 'Pronađite proverenog majstora u vašem gradu')
+@section('heading', 'Nađi majstora')
+@section('subheading', 'Provereni majstori u vašem gradu')
 
 @section('content')
     <div class="hero">

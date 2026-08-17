@@ -8,6 +8,8 @@ class TelegramKeyboardBuilder
 
     public const BTN_NEW_SEARCH = 'Nova pretraga';
 
+    public const BTN_OTHER_CITY = 'Drugi grad';
+
     public const BTN_HOME = 'Početak';
 
     public const BTN_ABOUT = 'O nama';
@@ -96,6 +98,42 @@ class TelegramKeyboardBuilder
     public function categoryCallback(string $slug): string
     {
         return 'cat:'.$slug;
+    }
+
+    public function categoryInCityCallback(string $slug, string $city): string
+    {
+        $data = 'catcity:'.$slug.':'.base64_encode($city);
+
+        if (strlen($data) <= 64) {
+            return $data;
+        }
+
+        return 'catcity:'.$slug.':'.rtrim(strtr(base64_encode($city), '+/', '-_'), '=');
+    }
+
+    public function parseCategoryInCityCallback(string $data): ?array
+    {
+        if (! str_starts_with($data, 'catcity:')) {
+            return null;
+        }
+
+        $parts = explode(':', $data, 3);
+
+        if (count($parts) !== 3) {
+            return null;
+        }
+
+        $encoded = $parts[2];
+        $decoded = base64_decode(strtr($encoded, '-_', '+/'), true);
+
+        if ($decoded === false) {
+            $decoded = base64_decode($encoded, true);
+        }
+
+        return [
+            'slug' => $parts[1],
+            'city' => $decoded ?: $encoded,
+        ];
     }
 
     public function cityCallback(string $slug, string $city): string

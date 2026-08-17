@@ -37,7 +37,7 @@ class ViberWebhookHandler
             ViberUser::touchFromPayload($payload['user']);
         }
 
-        return $this->showMainMenu();
+        return $this->showCategories();
     }
 
     private function handleMessage(array $payload): array
@@ -50,8 +50,9 @@ class ViberWebhookHandler
         return match ($action['action'] ?? null) {
             'find_craftsman' => $this->showCategories(),
             'about' => $this->showAbout(),
-            'back_main' => $this->showMainMenu(),
+            'back_main' => $this->showCategories(),
             'category' => $this->showCities($action['slug'] ?? ''),
+            'city_category' => $this->showCraftsmen($action['slug'] ?? '', $action['city'] ?? ''),
             'city' => $this->showCraftsmen($action['slug'] ?? '', $action['city'] ?? ''),
             default => $this->handleFallbackText($payload['message']['text'] ?? ''),
         };
@@ -82,7 +83,7 @@ class ViberWebhookHandler
         );
     }
 
-    private function showCategories(): array
+    private function showCategories(?string $message = null): array
     {
         $categories = $this->catalog->categoriesWithCounts();
 
@@ -102,7 +103,7 @@ class ViberWebhookHandler
         ])->all();
 
         return $this->messages->text(
-            $this->copy->categories($categories->count()),
+            $message ?? $this->copy->categories($categories->count()),
             $this->messages->optionsKeyboard($options),
         );
     }
@@ -208,10 +209,13 @@ class ViberWebhookHandler
             }
         }
 
-        return $this->messages->text(
-            $this->copy->notUnderstood(),
-            $this->messages->mainKeyboard(),
-        );
+        $city = $this->search->resolveCityOnly($text);
+
+        if ($city !== null) {
+            return $this->showCategoriesForCity($city);
+        }
+
+        return $this->showCategories($this->copy->notUnderstood());
     }
 
     private function showCategoriesForCity(string $city): array
@@ -228,8 +232,9 @@ class ViberWebhookHandler
         $options = $categories->map(fn (Category $category) => [
             'label' => $category->name,
             'tracking' => [
-                'action' => 'category',
+                'action' => 'city_category',
                 'slug' => $category->slug,
+                'city' => $city,
             ],
         ])->all();
 

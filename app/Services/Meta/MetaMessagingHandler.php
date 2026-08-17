@@ -40,6 +40,9 @@ class MetaMessagingHandler
             return;
         }
 
+        // Učitaj katalog odmah da sledeći koraci budu brži.
+        $this->catalog->categoriesWithCounts();
+
         foreach ($body['entry'] ?? [] as $entry) {
             foreach ($entry['messaging'] ?? [] as $event) {
                 $this->handleMessagingEvent($event, $platform);
@@ -55,8 +58,26 @@ class MetaMessagingHandler
             return;
         }
 
+        $this->api->sendTypingOn($senderId, $platform);
+
         $user = $this->touchUser($senderId, $platform);
         $isNewUser = $user->wasRecentlyCreated;
+
+        if (isset($event['optin'])) {
+            $this->welcomeUser($senderId, $platform, $user, $isNewUser);
+
+            return;
+        }
+
+        if (isset($event['referral'])) {
+            if ($isNewUser) {
+                $this->welcomeUser($senderId, $platform, $user, true);
+            } else {
+                $this->showCategories($senderId, $platform);
+            }
+
+            return;
+        }
 
         if (isset($event['postback'])) {
             $payload = trim((string) ($event['postback']['payload'] ?? ''));
@@ -95,6 +116,10 @@ class MetaMessagingHandler
         $text = trim((string) ($event['message']['text'] ?? ''));
 
         if ($text === '') {
+            if ($isNewUser) {
+                $this->welcomeUser($senderId, $platform, $user, true);
+            }
+
             return;
         }
 
@@ -103,13 +128,11 @@ class MetaMessagingHandler
         if ($isNewUser) {
             $this->logStart($platform, $user);
 
-            if ($this->isServiceRequest($text)) {
-                $this->showCategories($senderId, $platform);
-
+            if ($this->tryHandleSearch($senderId, $text, $platform)) {
                 return;
             }
 
-            $this->showMainMenu($senderId, $platform);
+            $this->welcomeUser($senderId, $platform, $user, false);
 
             return;
         }
@@ -120,7 +143,7 @@ class MetaMessagingHandler
     private function handleText(string $senderId, string $text, string $platform): void
     {
         if ($this->isGetStartedPayload($text) || in_array(mb_strtolower($text), ['start', '/start', 'početak', 'pocetak', 'menu', 'hi', 'hello', 'hey', 'cao', 'ćao', 'zdravo'], true)) {
-            $this->showMainMenu($senderId, $platform);
+            $this->showCategories($senderId, $platform);
 
             return;
         }
@@ -132,13 +155,7 @@ class MetaMessagingHandler
         }
 
         if (in_array($text, [MetaPayloadBuilder::BTN_HOME, MetaPayloadBuilder::BTN_NEW_SEARCH], true)) {
-            if ($text === MetaPayloadBuilder::BTN_NEW_SEARCH) {
-                $this->showCategories($senderId, $platform);
-
-                return;
-            }
-
-            $this->showMainMenu($senderId, $platform);
+            $this->showCategories($senderId, $platform);
 
             return;
         }
@@ -146,6 +163,10 @@ class MetaMessagingHandler
         if (in_array($text, [MetaPayloadBuilder::BTN_ABOUT, 'Pomoć', 'Pomoc'], true)) {
             $this->showAbout($senderId, $platform);
 
+            return;
+        }
+
+        if ($this->tryHandleSearch($senderId, $text, $platform)) {
             return;
         }
 
@@ -157,16 +178,7 @@ class MetaMessagingHandler
             return;
         }
 
-        if ($this->tryHandleSearch($senderId, $text, $platform)) {
-            return;
-        }
-
-        $this->api->sendText(
-            $senderId,
-            $this->messages->notUnderstood(),
-            $platform,
-            $this->payload->quickReplies([], true),
-        );
+        $this->showCategories($senderId, $platform, $this->messages->notUnderstood());
     }
 
     private function tryHandleSearch(string $senderId, string $text, string $platform): bool
@@ -174,6 +186,14 @@ class MetaMessagingHandler
         $parsed = $this->search->parse($text);
 
         if ($parsed === null) {
+            $city = $this->search->resolveCityOnly($text);
+
+            if ($city !== null) {
+                $this->showCategoriesForCity($senderId, $city, $platform);
+
+                return true;
+            }
+
             return false;
         }
 
@@ -203,19 +223,14 @@ class MetaMessagingHandler
         $categories = $this->search->categoriesInCity($city);
 
         if ($categories->isEmpty()) {
-            $this->api->sendText(
-                $senderId,
-                $this->messages->emptyCity($city),
-                $platform,
-                $this->payload->quickReplies([], true),
-            );
+            $this->sendHomeButton($senderId, $platform, $this->messages->emptyCity($city));
 
             return;
         }
 
         $options = $categories->map(fn (Category $category) => [
             'label' => $category->name,
-            'data' => $this->payload->categoryCallback($category->slug),
+            'data' => $this->payload->categoryInCityCallback($category->slug, $city),
         ])->all();
 
         $this->showOptionButtons(
@@ -235,12 +250,29 @@ class MetaMessagingHandler
         }
 
         if (str_starts_with($payload, 'act:')) {
-            match (substr($payload, 4)) {
-                'find' => $this->showCategories($senderId, $platform),
+            $action = substr($payload, 4);
+
+            if (str_starts_with($action, 'cities:')) {
+                $this->showCities($senderId, substr($action, 7), $platform);
+
+                return;
+            }
+
+            match ($action) {
+                'find', 'main' => $this->showCategories($senderId, $platform),
                 'about' => $this->showAbout($senderId, $platform),
-                'main' => $this->showMainMenu($senderId, $platform),
-                default => $this->showMainMenu($senderId, $platform),
+                default => $this->showCategories($senderId, $platform),
             };
+
+            return;
+        }
+
+        if (str_starts_with($payload, 'catcity:')) {
+            $parsed = $this->payload->parseCategoryInCityCallback($payload);
+
+            if ($parsed !== null) {
+                $this->showCraftsmen($senderId, $parsed['slug'], $parsed['city'], $platform);
+            }
 
             return;
         }
@@ -269,7 +301,7 @@ class MetaMessagingHandler
             return;
         }
 
-        $this->showMainMenu($senderId, $platform);
+        $this->showCategories($senderId, $platform);
     }
 
     private function welcomeUser(string $senderId, string $platform, MessengerUser|InstagramUser $user, bool $isNewUser): void
@@ -278,7 +310,23 @@ class MetaMessagingHandler
             $this->logStart($platform, $user);
         }
 
-        $this->showMainMenu($senderId, $platform);
+        $welcome = $platform === 'instagram'
+            ? config('instagram.welcome_message')
+            : config('messenger.welcome_message');
+
+        $categories = $this->availableCategories();
+
+        if ($categories->isEmpty()) {
+            $this->sendHomeButton($senderId, $platform, $this->messages->emptyCategories());
+
+            return;
+        }
+
+        $this->showCategories(
+            $senderId,
+            $platform,
+            $this->messages->home($welcome, $categories->count()),
+        );
     }
 
     private function showMainMenu(string $senderId, string $platform): void
@@ -290,12 +338,7 @@ class MetaMessagingHandler
         $categories = $this->availableCategories();
 
         if ($categories->isEmpty()) {
-            $this->api->sendText(
-                $senderId,
-                $this->messages->emptyCategories(),
-                $platform,
-                $this->payload->quickReplies([], true),
-            );
+            $this->sendHomeButton($senderId, $platform, $this->messages->emptyCategories());
 
             return;
         }
@@ -328,17 +371,12 @@ class MetaMessagingHandler
         );
     }
 
-    private function showCategories(string $senderId, string $platform): void
+    private function showCategories(string $senderId, string $platform, ?string $message = null): void
     {
         $categories = $this->availableCategories();
 
         if ($categories->isEmpty()) {
-            $this->api->sendText(
-                $senderId,
-                $this->messages->emptyCategories(),
-                $platform,
-                $this->payload->quickReplies([], true),
-            );
+            $this->sendHomeButton($senderId, $platform, $this->messages->emptyCategories());
 
             return;
         }
@@ -360,8 +398,9 @@ class MetaMessagingHandler
         $this->showOptionButtons(
             $senderId,
             $platform,
-            $this->messages->categories($categories->count()),
+            $message ?? $this->messages->categories($categories->count()),
             $options,
+            includeBack: false,
         );
     }
 
@@ -378,12 +417,7 @@ class MetaMessagingHandler
         $cities = $this->catalog->citiesForCategory($category->id);
 
         if ($cities->isEmpty()) {
-            $this->api->sendText(
-                $senderId,
-                $this->messages->emptyCities($category->name),
-                $platform,
-                $this->payload->quickReplies([], true),
-            );
+            $this->sendHomeButton($senderId, $platform, $this->messages->emptyCities($category->name));
 
             return;
         }
@@ -414,27 +448,54 @@ class MetaMessagingHandler
     /**
      * @param  array<int, array{label: string, data: string}>  $options
      */
-    private function showOptionButtons(string $senderId, string $platform, string $title, array $options): void
-    {
-        $chunks = array_chunk($options, 12);
-        $lastIndex = count($chunks) - 1;
-        $messages = [];
+    private function showOptionButtons(
+        string $senderId,
+        string $platform,
+        string $title,
+        array $options,
+        bool $includeBack = true,
+    ): void {
+        if ($options === []) {
+            $this->api->sendText($senderId, $title, $platform);
 
-        foreach ($chunks as $index => $chunk) {
-            $message = [
-                'text' => $index === 0 ? $title : $this->messages->moreOptions(),
-            ];
-
-            $replies = $this->payload->quickReplies($chunk, $index === $lastIndex);
-
-            if ($replies !== []) {
-                $message['quick_replies'] = $replies;
-            }
-
-            $messages[] = $message;
+            return;
         }
 
-        $this->api->sendMany($senderId, $messages, $platform);
+        $this->api->sendText($senderId, $title, $platform);
+
+        $elements = array_map(fn (array $option): array => [
+            'title' => mb_strimwidth($option['label'], 0, 80, '…'),
+            'buttons' => [
+                $this->payload->postbackButton('Izaberi', $option['data']),
+            ],
+        ], $options);
+
+        foreach (array_chunk($elements, 10) as $index => $chunk) {
+            if ($index > 0) {
+                $this->api->sendText($senderId, $this->messages->moreOptions(), $platform);
+            }
+
+            $this->api->sendGenericTemplate($senderId, $chunk, $platform);
+        }
+
+        if ($includeBack) {
+            $this->api->sendButtonTemplate(
+                $senderId,
+                $this->messages->footerPrompt(),
+                $this->payload->homeButton(),
+                $platform,
+            );
+        }
+    }
+
+    private function sendHomeButton(string $senderId, string $platform, string $text): void
+    {
+        $this->api->sendButtonTemplate(
+            $senderId,
+            $text,
+            $this->payload->homeButton(),
+            $platform,
+        );
     }
 
     private function showCraftsmen(string $senderId, string $slug, string $city, string $platform): void
@@ -453,12 +514,7 @@ class MetaMessagingHandler
             ->get();
 
         if ($craftsmen->isEmpty()) {
-            $this->api->sendText(
-                $senderId,
-                $this->messages->emptyCraftsmen($category->name, $city),
-                $platform,
-                $this->payload->quickReplies([], true),
-            );
+            $this->sendHomeButton($senderId, $platform, $this->messages->emptyCraftsmen($category->name, $city));
 
             return;
         }
@@ -495,39 +551,44 @@ class MetaMessagingHandler
             }
 
             $elements[] = [
-                'title' => $craftsman->is_premium ? "⭐ {$craftsman->name}" : $craftsman->name,
+                'title' => $craftsman->is_premium ? "Preporučeno: {$craftsman->name}" : $craftsman->name,
                 'subtitle' => $subtitle,
                 'buttons' => array_slice($buttons, 0, 3),
             ];
         }
 
         if (! $this->api->sendGenericTemplate($senderId, $elements, $platform)) {
-            $this->api->sendText(
-                $senderId,
-                $this->messages->emptyCraftsmen($category->name, $city),
-                $platform,
-                $this->payload->quickReplies([], true),
-            );
+            $this->sendHomeButton($senderId, $platform, $this->messages->emptyCraftsmen($category->name, $city));
+
+            return;
         }
+
+        $this->api->sendButtonTemplate(
+            $senderId,
+            $this->messages->footerPrompt(),
+            $this->payload->afterSearchButtons($category->slug),
+            $platform,
+        );
     }
 
     private function showAbout(string $senderId, string $platform): void
     {
-        $this->api->sendText(
+        $this->api->sendButtonTemplate(
             $senderId,
             $this->messages->about(
                 Setting::get('about_text', 'Platforma za pronalaženje proverenih majstora.'),
                 Setting::get('contact_phone'),
                 Setting::get('contact_email'),
             ),
+            $this->payload->homeButton(),
             $platform,
-            $this->payload->quickReplies([], true),
         );
     }
 
     private function isGetStartedPayload(string $payload): bool
     {
-        return in_array(strtoupper($payload), ['GET_STARTED', 'GET STARTED'], true);
+        return in_array(strtoupper($payload), ['GET_STARTED', 'GET STARTED'], true)
+            || $payload === 'act:find';
     }
 
     private function isServiceRequest(string $text): bool

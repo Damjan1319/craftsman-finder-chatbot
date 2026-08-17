@@ -28,7 +28,7 @@ class MessengerUser extends Model
         if ($existing !== null) {
             $existing->update(['last_interaction' => now()]);
 
-            return $existing->fresh();
+            return $existing;
         }
 
         return static::query()->create([

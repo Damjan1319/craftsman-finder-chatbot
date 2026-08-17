@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\Craftsmen\Schemas;
 
+use App\Services\Geo\SerbianCityRegistry;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -40,10 +42,6 @@ class CraftsmanForm
                             ->placeholder('+3816...')
                             ->maxLength(30)
                             ->helperText('Opciono — za dugme za Viber poruku'),
-                        TextInput::make('city')
-                            ->label('Grad')
-                            ->required()
-                            ->maxLength(255),
                         Select::make('status')
                             ->label('Status')
                             ->options([
@@ -57,6 +55,30 @@ class CraftsmanForm
                             ->label('Opis usluga')
                             ->rows(4)
                             ->columnSpanFull(),
+                    ]),
+                Section::make('Područje rada')
+                    ->description('Gde majstor radi — osnovni grad, dodatni gradovi i/ili radijus u kilometrima.')
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('city')
+                            ->label('Osnovni grad')
+                            ->required()
+                            ->maxLength(255)
+                            ->datalist(fn () => app(SerbianCityRegistry::class)->knownCityNames())
+                            ->helperText('Glavna lokacija majstora'),
+                        TextInput::make('service_radius_km')
+                            ->label('Radijus (km)')
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(500)
+                            ->placeholder('npr. 100')
+                            ->helperText('Prazno = bez radijusa. Npr. 100 = dolazi u krugu od 100 km od osnovnog grada.'),
+                        TagsInput::make('extra_cities')
+                            ->label('Dodatni gradovi')
+                            ->placeholder('Unesite grad i pritisnite Enter')
+                            ->suggestions(fn () => app(SerbianCityRegistry::class)->knownCityNames())
+                            ->columnSpanFull()
+                            ->helperText('Gradovi u kojima majstor radi pored osnovnog. Prikazuje se u adminu i na sajtu.'),
                     ]),
                 Section::make('Plaćena preporuka')
                     ->description('Preporučeni majstori se prikazuju na vrhu liste sa oznakom „Preporučeno”.')

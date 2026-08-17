@@ -1,4 +1,4 @@
-const CACHE = 'majstori-v4';
+const CACHE = 'nadi-majstora-v5';
 const STATIC_ASSETS = [
     '/css/app.css',
     '/manifest.json',

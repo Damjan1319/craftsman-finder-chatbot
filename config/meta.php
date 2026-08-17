@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'app_id' => env('META_APP_ID'),
     'app_secret' => env('META_APP_SECRET'),
     'verify_token' => env('META_VERIFY_TOKEN', 'majstori-verify'),
     'graph_version' => env('META_GRAPH_VERSION', 'v21.0'),

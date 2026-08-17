@@ -9,6 +9,14 @@
         {!! nl2br(e($aboutText)) !!}
     </div>
 
+    <div class="about-card" style="margin-top: 1rem;">
+        <p class="section-label">Prijava majstora</p>
+        <p>Ukoliko ste majstor i želite da se prijavite na platformu Nađi majstora, kontaktirajte nas na mejl:</p>
+        <a href="mailto:{{ $craftsmanEmail }}" class="btn btn-outline" style="margin-top: 0.75rem;">
+            {{ $craftsmanEmail }}
+        </a>
+    </div>
+
     @if ($contactPhone || $contactEmail)
         <div class="contact-section">
             <p class="section-label">Kontakt</p>

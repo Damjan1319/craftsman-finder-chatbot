@@ -29,8 +29,8 @@ class MetaWebhookInfo extends Command
         $this->line('2. Messenger → Settings → Webhooks → Add Callback URL');
         $this->line('   - Callback URL: '.$url);
         $this->line('   - Verify Token: '.$verifyToken);
-        $this->line('   - Subscribe: messages, messaging_postbacks');
-        $this->warn('   VAŽNO: mora biti čekirano messaging_postbacks (inače klik na dugmad ne radi!)');
+        $this->line('   - Subscribe: messages, messaging_postbacks, messaging_referrals, messaging_optins');
+        $this->warn('   VAŽNO: mora biti čekirano messaging_postbacks (dugmad), messaging_referrals (prvi ulazak) i messaging_optins (Send Message)!');
         $this->line('3. Instagram → Webhooks (ili API setup) → isti Callback URL');
         $this->line('   - Subscribe: messages, messaging_postbacks');
         $this->newLine();
@@ -47,10 +47,10 @@ class MetaWebhookInfo extends Command
             $this->info('MESSENGER_PAGE_ACCESS_TOKEN: OK');
 
             if ($this->option('setup')) {
-                if ($api->setMessengerGetStarted()) {
-                    $this->info('Get Started dugme je postavljeno na Messenger profilu.');
+                if ($api->configureMessengerProfile()) {
+                    $this->info('Messenger profil je podešen (Počni + greeting + predložena pitanja).');
                 } else {
-                    $this->error('Get Started setup nije uspeo — proveri log.');
+                    $this->error('Messenger profil setup nije uspeo — proveri log.');
                 }
             }
         }
@@ -65,6 +65,11 @@ class MetaWebhookInfo extends Command
             $this->warn('META_SKIP_SIGNATURE=true — potpis se ne proverava (samo za lokalni dev)');
         }
 
+        $this->newLine();
+        $this->warn('Ako drugi ljudi ne dobijaju odgovor:');
+        $this->line('- Meta aplikacija mora biti u Live modu (App Mode → Live), ne Development');
+        $this->line('- Stranica mora imati dozvolu za poruke (messages + messaging_postbacks u webhooku)');
+        $this->line('- Pokreni: php artisan meta:webhook-info --setup');
         $this->newLine();
         $this->line('Lokalni test:');
         $this->line('  php artisan serve');

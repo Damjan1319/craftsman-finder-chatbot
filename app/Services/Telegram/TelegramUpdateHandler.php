@@ -53,12 +53,30 @@ class TelegramUpdateHandler
                 $user->source,
             );
 
-            $this->showMainMenu($chatId, $user, null, true);
+            $this->startFind($chatId, $user);
 
             return;
         }
 
         $user = TelegramUser::touchFromTelegram($from);
+        $isNewUser = $user->wasRecentlyCreated;
+
+        if ($isNewUser) {
+            $this->tracker->log(
+                UsageEvent::PLATFORM_TELEGRAM,
+                UsageEvent::EVENT_START,
+                (int) $from['id'],
+                $user->source,
+            );
+
+            if ($this->tryHandleSearch($chatId, $text, $user)) {
+                return;
+            }
+
+            $this->startFind($chatId, $user);
+
+            return;
+        }
 
         if (in_array($text, [TelegramKeyboardBuilder::BTN_SERVICE, 'Izaberi majstora', 'Tražim majstora'], true)) {
             $this->startFind($chatId, $user);
@@ -66,8 +84,8 @@ class TelegramUpdateHandler
             return;
         }
 
-        if (in_array($text, [TelegramKeyboardBuilder::BTN_HOME, '/menu', '/pocetak'], true)) {
-            $this->showMainMenu($chatId, $user, null, true);
+        if (in_array($text, [TelegramKeyboardBuilder::BTN_HOME, '/menu', '/pocetak', '/start'], true)) {
+            $this->startFind($chatId, $user);
 
             return;
         }
@@ -82,13 +100,7 @@ class TelegramUpdateHandler
             return;
         }
 
-        $this->replaceScreen(
-            $chatId,
-            $user,
-            null,
-            $this->messages->notUnderstood(),
-            $this->keyboard->backMenu(),
-        );
+        $this->showCategories($chatId, $user, null, $this->messages->notUnderstood());
     }
 
     private function tryHandleSearch(int $chatId, string $text, TelegramUser $user): bool
@@ -96,6 +108,14 @@ class TelegramUpdateHandler
         $parsed = $this->search->parse($text);
 
         if ($parsed === null) {
+            $city = $this->search->resolveCityOnly($text);
+
+            if ($city !== null) {
+                $this->showCategoriesForCity($chatId, $city, $user);
+
+                return true;
+            }
+
             return false;
         }
 
@@ -138,7 +158,7 @@ class TelegramUpdateHandler
 
         $options = $categories->map(fn (Category $category) => [
             'label' => $category->name,
-            'data' => $this->keyboard->categoryCallback($category->slug),
+            'data' => $this->keyboard->categoryInCityCallback($category->slug, $city),
         ])->all();
 
         $this->replaceScreen(
@@ -185,12 +205,29 @@ class TelegramUpdateHandler
                 $messageId = null;
             }
 
-            match (substr($data, 4)) {
-                'find' => $this->showCategories($chatId, $user, $messageId),
+            $action = substr($data, 4);
+
+            if (str_starts_with($action, 'cities:')) {
+                $this->showCities($chatId, substr($action, 7), $user, $messageId);
+
+                return;
+            }
+
+            match ($action) {
+                'find', 'main' => $this->showCategories($chatId, $user, $messageId),
                 'about' => $this->showAbout($chatId, $user, $messageId),
-                'main' => $this->showMainMenu($chatId, $user, $messageId, true),
-                default => $this->showMainMenu($chatId, $user, $messageId, true),
+                default => $this->showCategories($chatId, $user, $messageId),
             };
+
+            return;
+        }
+
+        if (str_starts_with($data, 'catcity:')) {
+            $parsed = $this->keyboard->parseCategoryInCityCallback($data);
+
+            if ($parsed !== null) {
+                $this->showCraftsmen($chatId, $parsed['slug'], $parsed['city'], $user);
+            }
 
             return;
         }
@@ -211,7 +248,7 @@ class TelegramUpdateHandler
             return;
         }
 
-        $this->showMainMenu($chatId, $user, $messageId, true);
+        $this->showCategories($chatId, $user, $messageId);
     }
 
     private function startFind(int $chatId, TelegramUser $user): void
@@ -286,7 +323,7 @@ class TelegramUpdateHandler
         );
     }
 
-    private function showCategories(int $chatId, TelegramUser $user, ?int $messageId = null): void
+    private function showCategories(int $chatId, TelegramUser $user, ?int $messageId = null, ?string $message = null): void
     {
         $categories = $this->catalog->categoriesWithCounts();
 
@@ -318,7 +355,7 @@ class TelegramUpdateHandler
             $chatId,
             $user,
             $messageId,
-            $this->messages->categories($categories->count()),
+            $message ?? $this->messages->categories($categories->count()),
             $this->keyboard->optionsMenu($options),
         );
     }
@@ -412,7 +449,7 @@ class TelegramUpdateHandler
             $lines[] = $this->messages->craftsmanCard($craftsman, $craftsman->is_premium);
 
             $row = [
-                ['text' => '📞 Pozovi', 'callback_data' => 'phone:'.$craftsman->id],
+                ['text' => 'Pozovi', 'callback_data' => 'phone:'.$craftsman->id],
             ];
 
             if (filled($craftsman->viber_id)) {
@@ -427,6 +464,9 @@ class TelegramUpdateHandler
 
         $keyboard[] = [
             ['text' => TelegramKeyboardBuilder::BTN_NEW_SEARCH, 'callback_data' => 'act:find'],
+            ['text' => TelegramKeyboardBuilder::BTN_OTHER_CITY, 'callback_data' => 'act:cities:'.$category->slug],
+        ];
+        $keyboard[] = [
             ['text' => TelegramKeyboardBuilder::BTN_HOME, 'callback_data' => 'act:main'],
         ];
 

@@ -5,7 +5,7 @@
         </div>
         <div class="craftsman-info">
             <h2>{{ $craftsman->name }}</h2>
-            <div class="location">{{ $craftsman->city }}</div>
+            <div class="location">{{ $craftsman->serviceAreaLabel() }}</div>
         </div>
         @if ($featured)
             <span class="badge-premium">Preporučeno</span>

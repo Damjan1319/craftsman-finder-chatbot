@@ -8,7 +8,7 @@ class BotCopy
 {
     public function brand(): string
     {
-        return 'Majstori';
+        return 'Nađi majstora';
     }
 
     public function welcome(string $message): string
@@ -23,78 +23,50 @@ class BotCopy
     public function home(string $welcomeMessage, int $categoryCount): string
     {
         return implode("\n", [
-            $this->welcome($welcomeMessage),
+            $welcomeMessage,
             '',
-            'Dostupno '.$this->categoryLabel($categoryCount).'.',
-            'Kliknite na dugme ispod ili ukucajte pretragu.',
-            '',
-            $this->searchHint(),
+            'Izaberite uslugu:',
         ]);
     }
 
     public function categories(int $count): string
     {
-        return implode("\n", [
-            $this->brand(),
-            '',
-            "Izaberite vrstu usluge ({$count}):",
-        ]);
+        return "Dobro došli na Nađi majstora.\n\nIzaberite potrebnu uslugu ili ukucajte:";
     }
 
     public function cities(string $categoryName, int $count): string
     {
-        return implode("\n", [
-            $this->brand(),
-            '',
-            "Usluga: {$categoryName}",
-            "Izaberite grad ({$count}):",
-        ]);
+        return "Odabrali ste {$categoryName}.\n\nOdaberite grad u kome vam je potrebna usluga:";
     }
 
     public function craftsmen(string $categoryName, string $city, int $count): string
     {
-        $label = $count === 1 ? 'majstor' : ($count < 5 ? 'majstora' : 'majstora');
-
-        return implode("\n", [
-            $this->brand(),
-            '',
-            "{$categoryName} · {$city}",
-            "Pronađeno {$count} {$label}. Kontaktirajte direktno:",
-        ]);
+        return "{$categoryName}, {$city}:";
     }
 
     public function categoriesForCity(string $city, int $count): string
     {
-        return implode("\n", [
-            $this->brand(),
-            '',
-            "Grad: {$city}",
-            "Izaberite uslugu ({$count}):",
-        ]);
+        return "U gradu {$city} dostupne su usluge. Izaberite:";
     }
 
     public function searchHint(): string
     {
-        return 'Brza pretraga: ukucajte npr. "električar Novi Sad"';
+        return 'Ukucajte npr. "električar Novi Sad" ili samo naziv grada.';
     }
 
     public function notUnderstood(): string
     {
-        return implode("\n", [
-            'Nisam razumeo tu poruku.',
-            $this->searchHint(),
-            'Ili izaberite opciju ispod.',
-        ]);
+        return 'Nisam razumeo. Izaberite uslugu ispod ili ukucajte grad ili pretragu.';
     }
 
     public function moreOptions(): string
     {
-        return 'Nastavite sa izborom:';
+        return 'Još opcija:';
     }
 
     public function footerPrompt(): string
     {
-        return 'Želite novu pretragu ili povratak na početak?';
+        return 'Nova pretraga, drugi grad ili početak?';
     }
 
     public function about(string $about, ?string $phone, ?string $email): string
@@ -104,7 +76,7 @@ class BotCopy
             '',
             'O nama',
             '',
-            $about,
+            AboutContent::body($about),
         ];
 
         if (filled($phone) || filled($email)) {
@@ -169,16 +141,16 @@ class BotCopy
         $lines = [];
 
         if ($featured) {
-            $lines[] = '⭐ Preporučeno';
+            $lines[] = 'Preporučeno';
         }
 
-        $lines[] = "📍 {$craftsman->city}";
+        $lines[] = $craftsman->serviceAreaLabel();
 
         if (filled($craftsman->bio)) {
             $lines[] = (string) str($craftsman->bio)->limit(120);
         }
 
-        $lines[] = "📞 {$craftsman->phone}";
+        $lines[] = "Tel: {$craftsman->phone}";
 
         return implode("\n", $lines);
     }
@@ -188,10 +160,10 @@ class BotCopy
         $lines = [$craftsman->name];
 
         if ($featured) {
-            $lines[] = '⭐ Preporučeno';
+            $lines[] = 'Preporučeno';
         }
 
-        $lines[] = "Grad: {$craftsman->city}";
+        $lines[] = 'Područje: '.$craftsman->serviceAreaLabel();
 
         if (filled($craftsman->bio)) {
             $lines[] = (string) str($craftsman->bio)->limit(160);

@@ -6,40 +6,27 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Craftsman;
 use App\Models\Setting;
+use App\Services\Bot\AboutContent;
+use App\Services\Bot\BotCatalog;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 
 class AppController extends Controller
 {
-    public function index(): View
+    public function index(BotCatalog $catalog): View
     {
-        $categories = Category::query()
-            ->active()
-            ->withCount(['craftsmen as active_craftsmen_count' => fn ($query) => $query->active()])
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get()
-            ->filter(fn (Category $category) => $category->active_craftsmen_count > 0)
-            ->values();
-
         return view('app.home', [
-            'categories' => $categories,
+            'categories' => $catalog->categoriesWithCounts(),
         ]);
     }
 
-    public function category(Category $category): View|RedirectResponse
+    public function category(Category $category, BotCatalog $catalog): View|RedirectResponse
     {
         if (! $category->is_active) {
             return redirect()->route('app.home');
         }
 
-        $cities = Craftsman::query()
-            ->where('category_id', $category->id)
-            ->active()
-            ->selectRaw('city, COUNT(*) as craftsmen_count')
-            ->groupBy('city')
-            ->orderBy('city')
-            ->get();
+        $cities = $catalog->citiesWithCountsForCategory($category->id);
 
         if ($cities->isEmpty()) {
             return redirect()
@@ -62,7 +49,7 @@ class AppController extends Controller
         $city = urldecode($city);
 
         $craftsmen = Craftsman::query()
-            ->with('category')
+            ->with(['category', 'serviceCities'])
             ->forCategoryAndCity($category->id, $city)
             ->get();
 
@@ -84,9 +71,10 @@ class AppController extends Controller
     public function about(): View
     {
         return view('app.about', [
-            'aboutText' => Setting::get('about_text', 'Platforma za pronalaženje proverenih majstora.'),
+            'aboutText' => Setting::get('about_text', AboutContent::DEFAULT_TEXT),
             'contactPhone' => Setting::get('contact_phone'),
             'contactEmail' => Setting::get('contact_email'),
+            'craftsmanEmail' => AboutContent::CRAFTSMAN_EMAIL,
         ]);
     }
 }

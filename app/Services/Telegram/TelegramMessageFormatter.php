@@ -102,11 +102,11 @@ class TelegramMessageFormatter
         $lines = ['<b>'.e($craftsman->name).'</b>'];
 
         if ($featured) {
-            $lines[] = '⭐ <i>Preporučeno</i>';
+            $lines[] = '<i>Preporučeno</i>';
         }
 
         $lines[] = '';
-        $lines[] = '📍 '.e($craftsman->city);
+        $lines[] = e($craftsman->city);
 
         if (filled($craftsman->bio)) {
             $lines[] = '';
@@ -114,7 +114,7 @@ class TelegramMessageFormatter
         }
 
         $lines[] = '';
-        $lines[] = '📞 <code>'.e($craftsman->phone).'</code>';
+        $lines[] = 'Tel: <code>'.e($craftsman->phone).'</code>';
 
         return implode("\n", $lines);
     }

@@ -8,6 +8,8 @@ class MetaPayloadBuilder
 
     public const BTN_NEW_SEARCH = 'Nova pretraga';
 
+    public const BTN_OTHER_CITY = 'Drugi grad';
+
     public const BTN_HOME = 'Početak';
 
     public const BTN_ABOUT = 'O nama';
@@ -30,9 +32,48 @@ class MetaPayloadBuilder
 
     public function craftsmenFooterQuickReplies(): array
     {
-        return $this->quickReplies([
+        return $this->afterSearchQuickReplies('');
+    }
+
+    public function afterSearchQuickReplies(string $categorySlug): array
+    {
+        $options = [
             ['label' => self::BTN_NEW_SEARCH, 'data' => 'act:find'],
-        ], true);
+        ];
+
+        if ($categorySlug !== '') {
+            $options[] = ['label' => self::BTN_OTHER_CITY, 'data' => 'act:cities:'.$categorySlug];
+        }
+
+        return $this->quickReplies($options, true);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function afterSearchButtons(string $categorySlug): array
+    {
+        $buttons = [
+            $this->postbackButton(self::BTN_NEW_SEARCH, 'act:find'),
+        ];
+
+        if ($categorySlug !== '') {
+            $buttons[] = $this->postbackButton(self::BTN_OTHER_CITY, 'act:cities:'.$categorySlug);
+        }
+
+        $buttons[] = $this->postbackButton(self::BTN_HOME, 'act:main');
+
+        return array_slice($buttons, 0, 3);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function homeButton(): array
+    {
+        return [
+            $this->postbackButton(self::BTN_HOME, 'act:main'),
+        ];
     }
 
     /**
@@ -88,6 +129,31 @@ class MetaPayloadBuilder
     public function categoryCallback(string $slug): string
     {
         return 'cat:'.$slug;
+    }
+
+    public function categoryInCityCallback(string $slug, string $city): string
+    {
+        return 'catcity:'.$slug.':'.base64_encode($city);
+    }
+
+    public function parseCategoryInCityCallback(string $data): ?array
+    {
+        if (! str_starts_with($data, 'catcity:')) {
+            return null;
+        }
+
+        $parts = explode(':', $data, 3);
+
+        if (count($parts) !== 3) {
+            return null;
+        }
+
+        $decoded = base64_decode($parts[2], true);
+
+        return [
+            'slug' => $parts[1],
+            'city' => $decoded ?: $parts[2],
+        ];
     }
 
     public function cityCallback(string $slug, string $city): string

@@ -92,6 +92,29 @@ class CraftsmanSearchService
         return new SearchQuery($category, $city);
     }
 
+    public function resolveCityOnly(string $text): ?string
+    {
+        $parsed = $this->parse($text);
+
+        if ($parsed !== null && $parsed->category === null && filled($parsed->city)) {
+            return $parsed->city;
+        }
+
+        $normalized = $this->normalize($text);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        foreach ($this->cityTerms() as $term => $canonicalCity) {
+            if ($normalized === $term) {
+                return $canonicalCity;
+            }
+        }
+
+        return null;
+    }
+
     /** @return Collection<int, Craftsman> */
     public function search(string $query): Collection
     {
@@ -111,7 +134,7 @@ class CraftsmanSearchService
     {
         $categoryIds = Craftsman::query()
             ->active()
-            ->where('city', $city)
+            ->servingCity($city)
             ->distinct()
             ->pluck('category_id');
 

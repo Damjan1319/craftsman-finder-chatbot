@@ -31,17 +31,15 @@ class MetaWebhookController extends Controller
         $body = $request->all();
 
         if ($body !== []) {
-            dispatch(function () use ($handler, $body): void {
-                try {
-                    $handler->handleWebhook($body);
-                } catch (\Throwable $exception) {
-                    Log::error('Meta webhook error', [
-                        'message' => $exception->getMessage(),
-                        'file' => $exception->getFile(),
-                        'line' => $exception->getLine(),
-                    ]);
-                }
-            })->afterResponse();
+            try {
+                $handler->handleWebhook($body);
+            } catch (\Throwable $exception) {
+                Log::error('Meta webhook error', [
+                    'message' => $exception->getMessage(),
+                    'file' => $exception->getFile(),
+                    'line' => $exception->getLine(),
+                ]);
+            }
         }
 
         return response('EVENT_RECEIVED', 200);
@@ -49,9 +47,9 @@ class MetaWebhookController extends Controller
 
     private function verifyWebhook(Request $request): Response
     {
-        $mode = $request->query('hub_mode');
-        $token = $request->query('hub_verify_token');
-        $challenge = $request->query('hub_challenge');
+        $mode = $request->query('hub_mode') ?? $request->query('hub.mode');
+        $token = $request->query('hub_verify_token') ?? $request->query('hub.verify_token');
+        $challenge = $request->query('hub_challenge') ?? $request->query('hub.challenge');
 
         if ($mode === 'subscribe' && $token === config('meta.verify_token') && filled($challenge)) {
             return response($challenge, 200)->header('Content-Type', 'text/plain');

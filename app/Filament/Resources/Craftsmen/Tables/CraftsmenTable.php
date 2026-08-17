@@ -26,7 +26,7 @@ class CraftsmenTable
                     ->searchable(['name', 'city', 'category.name'])
                     ->sortable()
                     ->weight(FontWeight::Bold)
-                    ->description(fn (Craftsman $record): string => $record->category->name.' · '.$record->city)
+                    ->description(fn (Craftsman $record): string => $record->category->name)
                     ->tooltip(fn (Craftsman $record): ?string => filled($record->bio) ? $record->bio : null)
                     ->wrap(),
                 TextColumn::make('phone')
@@ -35,6 +35,14 @@ class CraftsmenTable
                     ->copyMessage('Broj kopiran')
                     ->icon(Heroicon::OutlinedPhone)
                     ->searchable(),
+                TextColumn::make('service_area')
+                    ->label('Područje rada')
+                    ->state(fn (Craftsman $record): string => $record->serviceAreaLabel())
+                    ->wrap()
+                    ->searchable(['city'])
+                    ->tooltip(fn (Craftsman $record): ?string => $record->serviceCities->isNotEmpty() || filled($record->service_radius_km)
+                        ? 'Osnovni grad, dodatni gradovi i radijus'
+                        : null),
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
@@ -71,7 +79,7 @@ class CraftsmenTable
             ])
             ->defaultSort('is_premium', 'desc')
             ->modifyQueryUsing(fn ($query) => $query
-                ->with('category')
+                ->with(['category', 'serviceCities'])
                 ->orderByDesc('is_premium')
                 ->orderBy('sort_order')
                 ->orderBy('name'))
@@ -87,7 +95,11 @@ class CraftsmenTable
                     ->relationship('category', 'name'),
                 SelectFilter::make('city')
                     ->label('Grad')
-                    ->options(fn () => Craftsman::query()->distinct()->orderBy('city')->pluck('city', 'city')->all()),
+                    ->options(fn () => cache()->remember('admin.craftsman_cities', 300, fn () => Craftsman::query()
+                        ->distinct()
+                        ->orderBy('city')
+                        ->pluck('city', 'city')
+                        ->all())),
                 SelectFilter::make('status')
                     ->label('Status')
                     ->options([

@@ -1,9 +1,23 @@
 {
   "version": 2,
   "framework": null,
+  "outputDirectory": "public",
   "functions": {
     "api/index.php": {
-      "runtime": "vercel-php@0.7.4"
+      "runtime": "vercel-php@0.7.4",
+      "maxDuration": 30
+    },
+    "api/meta/webhook.php": {
+      "runtime": "vercel-php@0.7.4",
+      "maxDuration": 30
+    },
+    "api/telegram/webhook.php": {
+      "runtime": "vercel-php@0.7.4",
+      "maxDuration": 30
+    },
+    "api/viber/webhook.php": {
+      "runtime": "vercel-php@0.7.4",
+      "maxDuration": 30
     }
   },
   "routes": [
@@ -12,12 +26,32 @@
       "dest": "/public/build/$1"
     },
     {
+      "src": "/fonts/(.*)",
+      "dest": "/public/fonts/$1"
+    },
+    {
       "src": "/css/(.*)",
       "dest": "/public/css/$1"
     },
     {
+      "src": "/icons/(.*)",
+      "dest": "/public/icons/$1"
+    },
+    {
+      "src": "/manifest.json",
+      "dest": "/public/manifest.json"
+    },
+    {
+      "src": "/sw.js",
+      "dest": "/public/sw.js"
+    },
+    {
       "src": "/js/(.*)",
       "dest": "/public/js/$1"
+    },
+    {
+      "src": "/livewire-(.*)",
+      "dest": "/api/index.php"
     },
     {
       "src": "/favicon.ico",
@@ -31,5 +65,15 @@
       "src": "/(.*)",
       "dest": "/api/index.php"
     }
-  ]
+  ],
+  "env": {
+    "APP_EVENTS_CACHE": "/tmp/events.php",
+    "APP_PACKAGES_CACHE": "/tmp/packages.php",
+    "APP_ROUTES_CACHE": "/tmp/routes.php",
+    "APP_SERVICES_CACHE": "/tmp/services.php",
+    "VIEW_COMPILED_PATH": "/tmp/views",
+    "CACHE_STORE": "array",
+    "SESSION_DRIVER": "cookie",
+    "LOG_CHANNEL": "stderr"
+  }
 }

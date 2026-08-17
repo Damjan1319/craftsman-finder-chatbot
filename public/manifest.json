@@ -1,7 +1,7 @@
 {
-    "name": "Majstori — Pronađi majstora",
-    "short_name": "Majstori",
-    "description": "Pronađite proverene majstore u vašem gradu",
+    "name": "Nađi majstora",
+    "short_name": "Nađi majstora",
+    "description": "Provereni majstori u vašem gradu",
     "start_url": "/",
     "scope": "/",
     "display": "standalone",

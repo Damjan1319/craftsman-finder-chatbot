@@ -4,12 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#d97706">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Majstori">
-    <meta name="description" content="Pronađite proverene majstore u vašem gradu — brzo i jednostavno.">
+    <meta name="apple-mobile-web-app-title" content="Nađi majstora">
+    <meta name="description" content="Nađi majstora — provereni majstori u vašem gradu.">
 
-    <title>@yield('title', 'Majstori') — Pronađi majstora</title>
+    <title>@yield('title', 'Nađi majstora')</title>
 
     <link rel="manifest" href="{{ asset('manifest.json') }}">
     <link rel="icon" href="{{ asset('icons/icon.svg') }}" type="image/svg+xml">
@@ -29,10 +30,10 @@
     <div class="shell">
         <aside class="sidebar" aria-label="Navigacija">
             <div class="sidebar-brand">
-                <div class="brand-mark">M</div>
+                <div class="brand-mark">N</div>
                 <div>
-                    <strong>Majstori</strong>
-                    <span>Pronađi majstora</span>
+                    <strong>Nađi majstora</strong>
+                    <span>Provereni majstori u tvom gradu</span>
                 </div>
             </div>
 
@@ -58,7 +59,7 @@
                             </a>
                         @endif
                         <div class="page-titles">
-                            <h1>@yield('heading', 'Majstori')</h1>
+                            <h1>@yield('heading', 'Nađi majstora')</h1>
                             @hasSection('subheading')
                                 <p>@yield('subheading')</p>
                             @endif
@@ -96,7 +97,7 @@
     <script>
         window.addEventListener('load', () => {
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('{{ asset('sw.js') }}?v=4').catch(() => {});
+                navigator.serviceWorker.register('{{ asset('sw.js') }}?v=5').catch(() => {});
             }
         });
 
