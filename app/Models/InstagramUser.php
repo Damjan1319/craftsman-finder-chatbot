@@ -41,6 +41,7 @@ class InstagramUser extends Model
     public function rememberCategory(string $slug): void
     {
         $this->update(['pending_category_slug' => $slug]);
+        $this->refresh();
     }
 
     public function clearCategory(): void

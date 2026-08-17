@@ -133,12 +133,31 @@ class MetaMessagingHandler
             return;
         }
 
-        if (isset($event['message']['quick_reply']['payload'])) {
-            $payload = (string) $event['message']['quick_reply']['payload'];
+        if (isset($event['message']['quick_reply'])) {
+            $payload = trim((string) ($event['message']['quick_reply']['payload'] ?? ''));
+            $replyText = trim((string) ($event['message']['text'] ?? ''));
 
-            Log::info('Meta quick reply received', ['platform' => $platform, 'payload' => $payload]);
+            Log::info('Meta quick reply received', [
+                'platform' => $platform,
+                'payload' => $payload,
+                'text' => $replyText,
+            ]);
 
-            $this->handlePayload($senderId, $payload, $platform);
+            if ($payload !== '') {
+                $this->handlePayload($senderId, $payload, $platform);
+
+                return;
+            }
+
+            if ($replyText !== '' && $this->tryShowCraftsmenFromPending($senderId, $platform, $replyText)) {
+                return;
+            }
+
+            if ($replyText !== '') {
+                $this->handleText($senderId, $replyText, $platform);
+
+                return;
+            }
 
             return;
         }
@@ -163,6 +182,10 @@ class MetaMessagingHandler
         if ($isNewUser || $this->isWelcomeIntent($text)) {
             if ($isNewUser) {
                 $this->logStart($platform, $user);
+            }
+
+            if ($this->tryShowCraftsmenFromPending($senderId, $platform, $text)) {
+                return;
             }
 
             if ($this->tryHandleSearch($senderId, $text, $platform)) {
@@ -197,11 +220,11 @@ class MetaMessagingHandler
             return;
         }
 
-        if ($this->tryHandleSearch($senderId, $text, $platform)) {
+        if ($this->tryShowCraftsmenFromPending($senderId, $platform, $text)) {
             return;
         }
 
-        if ($this->tryShowCraftsmenFromPending($senderId, $platform, $text)) {
+        if ($this->tryHandleSearch($senderId, $text, $platform)) {
             return;
         }
 
@@ -224,6 +247,10 @@ class MetaMessagingHandler
             $city = $this->search->resolveCityOnly($text);
 
             if ($city !== null) {
+                if ($this->tryShowCraftsmenFromPending($senderId, $platform, $city)) {
+                    return true;
+                }
+
                 $this->showCategoriesForCity($senderId, $city, $platform);
 
                 return true;
@@ -245,6 +272,10 @@ class MetaMessagingHandler
         }
 
         if ($parsed->city !== null) {
+            if ($this->tryShowCraftsmenFromPending($senderId, $platform, $parsed->city)) {
+                return true;
+            }
+
             $this->showCategoriesForCity($senderId, $parsed->city, $platform);
 
             return true;
@@ -745,7 +776,10 @@ class MetaMessagingHandler
 
     private function pendingCategorySlug(string $senderId, string $platform): ?string
     {
-        $slug = $this->touchUser($senderId, $platform)->pending_category_slug;
+        $user = $this->touchUser($senderId, $platform);
+        $user->refresh();
+
+        $slug = $user->pending_category_slug;
 
         return filled($slug) ? (string) $slug : null;
     }
