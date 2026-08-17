@@ -131,7 +131,7 @@ class MetaApiClient
             ],
             'ice_breakers' => [
                 [
-                    'question' => 'Tražim majstora',
+                    'question' => 'Treba mi majstor',
                     'payload' => 'GET_STARTED',
                 ],
                 [

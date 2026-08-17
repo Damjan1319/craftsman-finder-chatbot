@@ -40,12 +40,29 @@ class MetaMessagingHandler
             return;
         }
 
-        // Učitaj katalog odmah da sledeći koraci budu brži.
         $this->catalog->categoriesWithCounts();
 
         foreach ($body['entry'] ?? [] as $entry) {
             foreach ($entry['messaging'] ?? [] as $event) {
-                $this->handleMessagingEvent($event, $platform);
+                try {
+                    $this->handleMessagingEvent($event, $platform);
+                } catch (\Throwable $exception) {
+                    Log::error('Meta messaging event error', [
+                        'platform' => $platform,
+                        'message' => $exception->getMessage(),
+                        'event' => $event,
+                    ]);
+
+                    $senderId = (string) ($event['sender']['id'] ?? '');
+
+                    if ($senderId !== '') {
+                        $this->api->sendText(
+                            $senderId,
+                            $this->messages->welcomePrompt(),
+                            $platform,
+                        );
+                    }
+                }
             }
         }
     }
@@ -63,6 +80,13 @@ class MetaMessagingHandler
         $user = $this->touchUser($senderId, $platform);
         $isNewUser = $user->wasRecentlyCreated;
 
+        if (isset($event['reaction'])) {
+            Log::info('Meta reaction received', ['platform' => $platform, 'reaction' => $event['reaction']]);
+            $this->welcomeUser($senderId, $platform, $user, $isNewUser);
+
+            return;
+        }
+
         if (isset($event['optin'])) {
             $this->welcomeUser($senderId, $platform, $user, $isNewUser);
 
@@ -70,11 +94,7 @@ class MetaMessagingHandler
         }
 
         if (isset($event['referral'])) {
-            if ($isNewUser) {
-                $this->welcomeUser($senderId, $platform, $user, true);
-            } else {
-                $this->showCategories($senderId, $platform);
-            }
+            $this->welcomeUser($senderId, $platform, $user, $isNewUser);
 
             return;
         }
@@ -83,6 +103,12 @@ class MetaMessagingHandler
             $payload = trim((string) ($event['postback']['payload'] ?? ''));
 
             Log::info('Meta postback received', ['platform' => $platform, 'payload' => $payload]);
+
+            if ($payload === '') {
+                $this->welcomeUser($senderId, $platform, $user, $isNewUser);
+
+                return;
+            }
 
             if ($this->isGetStartedPayload($payload)) {
                 $this->welcomeUser($senderId, $platform, $user, $isNewUser);
@@ -113,20 +139,27 @@ class MetaMessagingHandler
             return;
         }
 
+        if ($this->isStickerOrLikeMessage($event['message'])) {
+            Log::info('Meta sticker/like received', ['platform' => $platform]);
+            $this->welcomeUser($senderId, $platform, $user, $isNewUser);
+
+            return;
+        }
+
         $text = trim((string) ($event['message']['text'] ?? ''));
 
         if ($text === '') {
-            if ($isNewUser) {
-                $this->welcomeUser($senderId, $platform, $user, true);
-            }
+            $this->welcomeUser($senderId, $platform, $user, $isNewUser);
 
             return;
         }
 
         Log::info('Meta message received', ['platform' => $platform, 'text' => $text]);
 
-        if ($isNewUser) {
-            $this->logStart($platform, $user);
+        if ($isNewUser || $this->isWelcomeIntent($text)) {
+            if ($isNewUser) {
+                $this->logStart($platform, $user);
+            }
 
             if ($this->tryHandleSearch($senderId, $text, $platform)) {
                 return;
@@ -142,13 +175,7 @@ class MetaMessagingHandler
 
     private function handleText(string $senderId, string $text, string $platform): void
     {
-        if ($this->isGetStartedPayload($text) || in_array(mb_strtolower($text), ['start', '/start', 'početak', 'pocetak', 'menu', 'hi', 'hello', 'hey', 'cao', 'ćao', 'zdravo'], true)) {
-            $this->showCategories($senderId, $platform);
-
-            return;
-        }
-
-        if ($this->isServiceRequest($text)) {
+        if ($this->isWelcomeIntent($text)) {
             $this->showCategories($senderId, $platform);
 
             return;
@@ -272,13 +299,21 @@ class MetaMessagingHandler
 
             if ($parsed !== null) {
                 $this->showCraftsmen($senderId, $parsed['slug'], $parsed['city'], $platform);
+            } else {
+                $this->showCategories($senderId, $platform);
             }
 
             return;
         }
 
         if (str_starts_with($payload, 'cat:')) {
-            $this->showCities($senderId, substr($payload, 4), $platform);
+            $slug = trim(substr($payload, 4));
+
+            if ($slug !== '') {
+                $this->showCities($senderId, $slug, $platform);
+            } else {
+                $this->showCategories($senderId, $platform);
+            }
 
             return;
         }
@@ -288,6 +323,8 @@ class MetaMessagingHandler
 
             if ($parsed !== null) {
                 $this->showCraftsmen($senderId, $parsed['slug'], $parsed['city'], $platform);
+            } else {
+                $this->showCategories($senderId, $platform);
             }
 
             return;
@@ -310,50 +347,7 @@ class MetaMessagingHandler
             $this->logStart($platform, $user);
         }
 
-        $welcome = $platform === 'instagram'
-            ? config('instagram.welcome_message')
-            : config('messenger.welcome_message');
-
-        $categories = $this->availableCategories();
-
-        if ($categories->isEmpty()) {
-            $this->sendHomeButton($senderId, $platform, $this->messages->emptyCategories());
-
-            return;
-        }
-
-        $this->showCategories(
-            $senderId,
-            $platform,
-            $this->messages->home($welcome, $categories->count()),
-        );
-    }
-
-    private function showMainMenu(string $senderId, string $platform): void
-    {
-        $welcome = $platform === 'instagram'
-            ? config('instagram.welcome_message')
-            : config('messenger.welcome_message');
-
-        $categories = $this->availableCategories();
-
-        if ($categories->isEmpty()) {
-            $this->sendHomeButton($senderId, $platform, $this->messages->emptyCategories());
-
-            return;
-        }
-
-        $options = [
-            ['label' => MetaPayloadBuilder::BTN_SERVICE, 'data' => 'act:find'],
-            ['label' => MetaPayloadBuilder::BTN_ABOUT, 'data' => 'act:about'],
-        ];
-
-        $this->showOptionButtons(
-            $senderId,
-            $platform,
-            $this->messages->home($welcome, $categories->count()),
-            $options,
-        );
+        $this->showCategories($senderId, $platform, $this->messages->welcomePrompt());
     }
 
     /** @return Collection<int, Category> */
@@ -398,7 +392,7 @@ class MetaMessagingHandler
         $this->showOptionButtons(
             $senderId,
             $platform,
-            $message ?? $this->messages->categories($categories->count()),
+            $message ?? $this->messages->welcomePrompt(),
             $options,
             includeBack: false,
         );
@@ -463,19 +457,18 @@ class MetaMessagingHandler
 
         $this->api->sendText($senderId, $title, $platform);
 
-        $elements = array_map(fn (array $option): array => [
-            'title' => mb_strimwidth($option['label'], 0, 80, '…'),
-            'buttons' => [
-                $this->payload->postbackButton('Izaberi', $option['data']),
-            ],
-        ], $options);
+        foreach (array_chunk($options, 3) as $index => $chunk) {
+            $buttons = array_map(
+                fn (array $option): array => $this->payload->postbackButton($option['label'], $option['data']),
+                $chunk,
+            );
 
-        foreach (array_chunk($elements, 10) as $index => $chunk) {
-            if ($index > 0) {
-                $this->api->sendText($senderId, $this->messages->moreOptions(), $platform);
-            }
-
-            $this->api->sendGenericTemplate($senderId, $chunk, $platform);
+            $this->api->sendButtonTemplate(
+                $senderId,
+                $index === 0 ? 'Kliknite na opciju:' : 'Još opcija:',
+                $buttons,
+                $platform,
+            );
         }
 
         if ($includeBack) {
@@ -585,6 +578,68 @@ class MetaMessagingHandler
         );
     }
 
+    private function isStickerOrLikeMessage(array $message): bool
+    {
+        if (isset($message['sticker_id'])) {
+            return true;
+        }
+
+        foreach ($message['attachments'] ?? [] as $attachment) {
+            $type = (string) ($attachment['type'] ?? '');
+
+            if (in_array($type, ['image', 'like', 'fallback'], true)) {
+                return true;
+            }
+
+            if (isset($attachment['payload']['sticker_id'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isWelcomeIntent(string $text): bool
+    {
+        $normalized = mb_strtolower(trim($text));
+
+        if ($normalized === '') {
+            return false;
+        }
+
+        if ($this->isGetStartedPayload($text) || $this->isServiceRequest($text)) {
+            return true;
+        }
+
+        $exactPhrases = [
+            'start', '/start', 'početak', 'pocetak', 'menu',
+            'hi', 'hello', 'hey', 'cao', 'ćao', 'zdravo', 'dobro',
+            'like', '👍', '👍🏻', '❤', '❤️', '💙', '🙂', '😊',
+            'majstor', 'usluga', 'treba mi majstor', 'trebam majstora',
+        ];
+
+        foreach ($exactPhrases as $phrase) {
+            if ($normalized === $phrase) {
+                return true;
+            }
+        }
+
+        $containsPhrases = [
+            'treba mi majstor', 'trebam majstora', 'treba mi majstora',
+            'tražim majstora', 'trazim majstora', 'nadji majstora', 'nađi majstora',
+            'nadjite majstora', 'nađite majstora', 'potrebna usluga', 'potrebna mi je usluga',
+            'treba mi usluga', 'trebam uslugu',
+        ];
+
+        foreach ($containsPhrases as $phrase) {
+            if (str_contains($normalized, $phrase)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function isGetStartedPayload(string $payload): bool
     {
         return in_array(strtoupper($payload), ['GET_STARTED', 'GET STARTED'], true)
@@ -593,7 +648,13 @@ class MetaMessagingHandler
 
     private function isServiceRequest(string $text): bool
     {
-        return in_array($text, [MetaPayloadBuilder::BTN_SERVICE, 'Izaberi majstora', 'Tražim majstora'], true);
+        return in_array($text, [
+            MetaPayloadBuilder::BTN_SERVICE,
+            'Izaberi majstora',
+            'Tražim majstora',
+            'Treba mi majstor',
+            'Treba mi majstora',
+        ], true);
     }
 
     private function touchUser(string $senderId, string $platform): MessengerUser|InstagramUser

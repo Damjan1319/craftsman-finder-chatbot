@@ -22,21 +22,26 @@ class BotCopy
 
     public function home(string $welcomeMessage, int $categoryCount): string
     {
+        return $this->welcomePrompt();
+    }
+
+    public function welcomePrompt(): string
+    {
         return implode("\n", [
-            $welcomeMessage,
+            'Dobro došli na Nađi majstora!',
             '',
-            'Izaberite uslugu:',
+            'Izaberite dostupnu uslugu koja vam je potrebna ili ukucajte tačan naziv.',
         ]);
     }
 
     public function categories(int $count): string
     {
-        return "Dobro došli na Nađi majstora.\n\nIzaberite potrebnu uslugu ili ukucajte:";
+        return $this->welcomePrompt();
     }
 
     public function cities(string $categoryName, int $count): string
     {
-        return "Odabrali ste {$categoryName}.\n\nOdaberite grad u kome vam je potrebna usluga:";
+        return "Odabrali ste: {$categoryName}\n\nSada izaberite grad u kome vam je potrebna usluga:";
     }
 
     public function craftsmen(string $categoryName, string $city, int $count): string
@@ -56,7 +61,7 @@ class BotCopy
 
     public function notUnderstood(): string
     {
-        return 'Nisam razumeo. Izaberite uslugu ispod ili ukucajte grad ili pretragu.';
+        return "Nisam razumeo.\n\nIzaberite uslugu sa dugmadi ispod ili ukucajte npr. \"električar Beograd\".";
     }
 
     public function moreOptions(): string

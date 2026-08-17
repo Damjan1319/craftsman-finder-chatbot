@@ -29,8 +29,8 @@ class MetaWebhookInfo extends Command
         $this->line('2. Messenger → Settings → Webhooks → Add Callback URL');
         $this->line('   - Callback URL: '.$url);
         $this->line('   - Verify Token: '.$verifyToken);
-        $this->line('   - Subscribe: messages, messaging_postbacks, messaging_referrals, messaging_optins');
-        $this->warn('   VAŽNO: mora biti čekirano messaging_postbacks (dugmad), messaging_referrals (prvi ulazak) i messaging_optins (Send Message)!');
+        $this->line('   - Subscribe: messages, messaging_postbacks, messaging_referrals, messaging_optins, message_reactions');
+        $this->warn('   VAŽNO: mora biti čekirano messaging_postbacks (dugmad), messaging_referrals (prvi ulazak), messaging_optins (Send Message) i message_reactions (like)!');
         $this->line('3. Instagram → Webhooks (ili API setup) → isti Callback URL');
         $this->line('   - Subscribe: messages, messaging_postbacks');
         $this->newLine();

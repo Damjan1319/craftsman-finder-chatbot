@@ -21,6 +21,11 @@ class MetaMessageFormatter
         return $this->copy->categories($count);
     }
 
+    public function welcomePrompt(): string
+    {
+        return $this->copy->welcomePrompt();
+    }
+
     public function cities(string $categoryName, int $count): string
     {
         return $this->copy->cities($categoryName, $count);
