@@ -102,6 +102,10 @@ class MetaMessagingHandler
         if (isset($event['postback'])) {
             $payload = trim((string) ($event['postback']['payload'] ?? ''));
 
+            if ($payload === '') {
+                $payload = trim((string) ($event['postback']['title'] ?? ''));
+            }
+
             Log::info('Meta postback received', ['platform' => $platform, 'payload' => $payload]);
 
             if ($payload === '') {
@@ -310,6 +314,7 @@ class MetaMessagingHandler
             $slug = trim(substr($payload, 4));
 
             if ($slug !== '') {
+                Log::info('Meta category selected', ['slug' => $slug]);
                 $this->showCities($senderId, $slug, $platform);
             } else {
                 $this->showCategories($senderId, $platform);
@@ -455,28 +460,39 @@ class MetaMessagingHandler
             return;
         }
 
+        // Sve opcije u jednoj poruci (quick replies) — najpouzdanije u Messengeru.
+        if (count($options) <= ($includeBack ? 12 : 13)) {
+            $this->api->sendText(
+                $senderId,
+                $title,
+                $platform,
+                $this->payload->quickReplies($options, $includeBack),
+            );
+
+            return;
+        }
+
+        // Više od 13: karusel kartica (do 10 u jednoj poruci).
+        $elements = array_map(fn (array $option): array => [
+            'title' => mb_strimwidth($option['label'], 0, 80, '…'),
+            'subtitle' => 'Kliknite za izbor',
+            'buttons' => [
+                $this->payload->postbackButton($option['label'], $option['data']),
+            ],
+        ], $options);
+
         $this->api->sendText($senderId, $title, $platform);
 
-        foreach (array_chunk($options, 3) as $index => $chunk) {
-            $buttons = array_map(
-                fn (array $option): array => $this->payload->postbackButton($option['label'], $option['data']),
-                $chunk,
-            );
-
-            $this->api->sendButtonTemplate(
-                $senderId,
-                $index === 0 ? 'Kliknite na opciju:' : 'Još opcija:',
-                $buttons,
-                $platform,
-            );
+        foreach (array_chunk($elements, 10) as $chunk) {
+            $this->api->sendGenericTemplate($senderId, $chunk, $platform);
         }
 
         if ($includeBack) {
-            $this->api->sendButtonTemplate(
+            $this->api->sendText(
                 $senderId,
                 $this->messages->footerPrompt(),
-                $this->payload->homeButton(),
                 $platform,
+                $this->payload->quickReplies([], true),
             );
         }
     }
@@ -556,11 +572,11 @@ class MetaMessagingHandler
             return;
         }
 
-        $this->api->sendButtonTemplate(
+        $this->api->sendText(
             $senderId,
             $this->messages->footerPrompt(),
-            $this->payload->afterSearchButtons($category->slug),
             $platform,
+            $this->payload->afterSearchQuickReplies($category->slug),
         );
     }
 

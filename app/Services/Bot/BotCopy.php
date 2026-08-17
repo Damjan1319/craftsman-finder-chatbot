@@ -30,7 +30,7 @@ class BotCopy
         return implode("\n", [
             'Dobro došli na Nađi majstora!',
             '',
-            'Izaberite dostupnu uslugu koja vam je potrebna ili ukucajte tačan naziv.',
+            'Izaberite uslugu ispod (dugmad) ili ukucajte tačan naziv.',
         ]);
     }
 
