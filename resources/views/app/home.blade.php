@@ -5,7 +5,16 @@
 @section('subheading', 'Provereni majstori u vašem gradu')
 
 @section('content')
-    <div class="hero">
+    <div class="hero hero-home">
+        <img
+            src="{{ asset('images/logo.webp') }}"
+            alt="Nađi majstora"
+            class="hero-logo"
+            width="220"
+            height="220"
+            decoding="async"
+            fetchpriority="high"
+        >
         <h2>Koji majstor vam treba?</h2>
         <p>Izaberite kategoriju, zatim grad — odmah dobijate kontakt proverenog majstora.</p>
     </div>

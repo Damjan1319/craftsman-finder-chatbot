@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#d97706">
+    <meta name="theme-color" content="#1e3a5f">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -13,12 +13,19 @@
     <title>@yield('title', 'Nađi majstora')</title>
 
     <link rel="manifest" href="{{ asset('manifest.json') }}">
-    <link rel="icon" href="{{ asset('icons/icon.svg') }}" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="{{ asset('icons/icon.svg') }}">
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v=5">
+    <link rel="icon" href="{{ asset('images/logo-icon.png') }}" type="image/png">
+    <link rel="apple-touch-icon" href="{{ asset('images/logo-icon.png') }}">
+    <link rel="preload" href="{{ asset('images/logo.webp') }}" as="image" type="image/webp">
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v=6">
     @stack('head')
 </head>
 <body>
+    <div id="page-loader" class="page-loader" aria-hidden="true">
+        <div class="page-loader-inner">
+            <img src="{{ asset('images/logo-icon.png') }}" alt="" width="40" height="40" class="page-loader-logo">
+            <span>Učitavanje...</span>
+        </div>
+    </div>
     <div id="install-banner" class="install-banner">
         <span>Instaliraj aplikaciju na telefon</span>
         <div class="install-banner-actions">
@@ -30,11 +37,16 @@
     <div class="shell">
         <aside class="sidebar" aria-label="Navigacija">
             <div class="sidebar-brand">
-                <div class="brand-mark">N</div>
-                <div>
-                    <strong>Nađi majstora</strong>
-                    <span>Provereni majstori u tvom gradu</span>
-                </div>
+                <a href="{{ route('app.home') }}" class="brand-link">
+                    <img
+                        src="{{ asset('images/logo.webp') }}"
+                        alt="Nađi majstora"
+                        class="brand-logo"
+                        width="160"
+                        height="160"
+                        decoding="async"
+                    >
+                </a>
             </div>
 
             <nav class="sidebar-nav">
@@ -95,11 +107,62 @@
     </nav>
 
     <script>
-        window.addEventListener('load', () => {
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('{{ asset('sw.js') }}?v=5').catch(() => {});
-            }
-        });
+        (() => {
+            const loader = document.getElementById('page-loader');
+            const showLoader = () => loader?.classList.add('show');
+            const hideLoader = () => loader?.classList.remove('show');
+
+            document.addEventListener('click', (event) => {
+                const link = event.target.closest('a[href]');
+
+                if (!link || link.target === '_blank' || link.origin !== location.origin) {
+                    return;
+                }
+
+                if (link.pathname === location.pathname) {
+                    return;
+                }
+
+                showLoader();
+                link.classList.add('is-loading');
+            });
+
+            window.addEventListener('pageshow', hideLoader);
+            window.addEventListener('load', hideLoader);
+
+            document.querySelectorAll('a[href^="/"]').forEach((link) => {
+                if (link.origin === location.origin) {
+                    link.dataset.prefetch = 'true';
+                }
+            });
+
+            let prefetchTimer;
+            document.addEventListener('mouseover', (event) => {
+                const link = event.target.closest('a[data-prefetch]');
+
+                if (!link) {
+                    return;
+                }
+
+                clearTimeout(prefetchTimer);
+                prefetchTimer = setTimeout(() => {
+                    if (document.querySelector(`link[rel="prefetch"][href="${link.href}"]`)) {
+                        return;
+                    }
+
+                    const hint = document.createElement('link');
+                    hint.rel = 'prefetch';
+                    hint.href = link.href;
+                    document.head.appendChild(hint);
+                }, 80);
+            });
+
+            window.addEventListener('load', () => {
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('{{ asset('sw.js') }}?v=6').catch(() => {});
+                }
+            }, { once: true });
+        })();
 
         let deferredPrompt;
         const banner = document.getElementById('install-banner');

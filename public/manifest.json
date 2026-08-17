@@ -7,19 +7,19 @@
     "display": "standalone",
     "orientation": "portrait",
     "background_color": "#f9fafb",
-    "theme_color": "#d97706",
+    "theme_color": "#1e3a5f",
     "lang": "sr",
     "icons": [
         {
-            "src": "/icons/icon.svg",
-            "sizes": "any",
-            "type": "image/svg+xml",
+            "src": "/images/logo-icon.png",
+            "sizes": "160x160",
+            "type": "image/png",
             "purpose": "any"
         },
         {
-            "src": "/icons/icon.svg",
-            "sizes": "512x512",
-            "type": "image/svg+xml",
+            "src": "/images/logo-icon.png",
+            "sizes": "160x160",
+            "type": "image/png",
             "purpose": "maskable"
         }
     ]

@@ -160,6 +160,73 @@ body {
     line-height: 1.6;
 }
 
+.hero-home {
+    text-align: center;
+}
+
+.hero-logo {
+    width: min(220px, 70vw);
+    height: auto;
+    margin: 0 auto 1rem;
+    display: block;
+}
+
+.brand-link {
+    display: block;
+    text-decoration: none;
+}
+
+.brand-logo {
+    width: 100%;
+    max-width: 9.5rem;
+    height: auto;
+    display: block;
+}
+
+.page-loader {
+    position: fixed;
+    inset: 0;
+    background: rgba(249, 250, 251, 0.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s, visibility 0.15s;
+    backdrop-filter: blur(2px);
+}
+
+.page-loader.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.page-loader-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--muted);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.page-loader-logo {
+    animation: pulse-logo 1s ease-in-out infinite;
+}
+
+@keyframes pulse-logo {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.65; transform: scale(0.96); }
+}
+
+.category-card.is-loading,
+.city-card.is-loading {
+    opacity: 0.65;
+    pointer-events: none;
+}
+
 .section-label {
     font-size: 0.75rem;
     font-weight: 600;
@@ -553,37 +620,15 @@ body {
 
     .sidebar-brand {
         display: flex;
+        flex-direction: column;
         align-items: center;
-        gap: 0.75rem;
-        padding: 0.5rem 0.75rem 1.5rem;
+        padding: 0.75rem 0.5rem 1.25rem;
         border-bottom: 1px solid var(--border);
         margin-bottom: 1rem;
     }
 
-    .brand-mark {
-        width: 2.5rem;
-        height: 2.5rem;
-        border-radius: var(--radius-sm);
-        background: var(--primary);
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        font-size: 1.125rem;
-    }
-
-    .sidebar-brand strong {
-        display: block;
-        font-size: 0.9375rem;
-        font-weight: 700;
-    }
-
-    .sidebar-brand span {
-        display: block;
-        font-size: 0.75rem;
-        color: var(--muted);
-        margin-top: 0.125rem;
+    .brand-logo {
+        max-width: 10.5rem;
     }
 
     .sidebar-nav {

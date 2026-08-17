@@ -30,8 +30,18 @@
       "dest": "/public/fonts/$1"
     },
     {
+      "src": "/images/(.*)",
+      "dest": "/public/images/$1",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
+    },
+    {
       "src": "/css/(.*)",
-      "dest": "/public/css/$1"
+      "dest": "/public/css/$1",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
     },
     {
       "src": "/icons/(.*)",

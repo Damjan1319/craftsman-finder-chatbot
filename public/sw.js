@@ -1,8 +1,9 @@
-const CACHE = 'nadi-majstora-v5';
+const CACHE = 'nadi-majstora-v6';
 const STATIC_ASSETS = [
     '/css/app.css',
     '/manifest.json',
-    '/icons/icon.svg',
+    '/images/logo.webp',
+    '/images/logo-icon.png',
 ];
 
 const IGNORED_PREFIXES = ['/admin', '/api', '/livewire'];
