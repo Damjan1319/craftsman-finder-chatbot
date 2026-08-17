@@ -201,6 +201,10 @@ class MetaMessagingHandler
             return;
         }
 
+        if ($this->tryShowCraftsmenFromPending($senderId, $platform, $text)) {
+            return;
+        }
+
         $category = $this->findCategoryByName($text);
 
         if ($category !== null) {
@@ -323,15 +327,35 @@ class MetaMessagingHandler
             return;
         }
 
+        if (str_starts_with($payload, 'pick:')) {
+            $city = $this->payload->parsePickCityCallback($payload);
+            $slug = $this->pendingCategorySlug($senderId, $platform);
+
+            if ($city !== null && filled($slug)) {
+                Log::info('Meta city selected', ['slug' => $slug, 'city' => $city]);
+                $this->showCraftsmen($senderId, $slug, $city, $platform);
+
+                return;
+            }
+
+            $this->showCategories($senderId, $platform);
+
+            return;
+        }
+
         if (str_starts_with($payload, 'city:')) {
             $parsed = $this->payload->parseCityCallback($payload);
 
             if ($parsed !== null) {
                 $this->showCraftsmen($senderId, $parsed['slug'], $parsed['city'], $platform);
-            } else {
+            } elseif (! $this->tryShowCraftsmenFromPending($senderId, $platform, $payload)) {
                 $this->showCategories($senderId, $platform);
             }
 
+            return;
+        }
+
+        if ($this->tryShowCraftsmenFromPending($senderId, $platform, $payload)) {
             return;
         }
 
@@ -372,6 +396,8 @@ class MetaMessagingHandler
 
     private function showCategories(string $senderId, string $platform, ?string $message = null): void
     {
+        $this->clearCategoryChoice($senderId, $platform);
+
         $categories = $this->availableCategories();
 
         if ($categories->isEmpty()) {
@@ -412,6 +438,8 @@ class MetaMessagingHandler
 
             return;
         }
+
+        $this->rememberCategoryChoice($senderId, $platform, $slug);
 
         $cities = $this->catalog->citiesForCategory($category->id);
 
@@ -707,5 +735,57 @@ class MetaMessagingHandler
         };
 
         return (int) $id;
+    }
+
+    private function rememberCategoryChoice(string $senderId, string $platform, string $slug): void
+    {
+        $user = $this->touchUser($senderId, $platform);
+        $user->rememberCategory($slug);
+    }
+
+    private function pendingCategorySlug(string $senderId, string $platform): ?string
+    {
+        $slug = $this->touchUser($senderId, $platform)->pending_category_slug;
+
+        return filled($slug) ? (string) $slug : null;
+    }
+
+    private function clearCategoryChoice(string $senderId, string $platform): void
+    {
+        $this->touchUser($senderId, $platform)->clearCategory();
+    }
+
+    private function tryShowCraftsmenFromPending(string $senderId, string $platform, string $cityLabel): bool
+    {
+        $slug = $this->pendingCategorySlug($senderId, $platform);
+
+        if ($slug === null) {
+            return false;
+        }
+
+        $city = $this->resolveCityInCategory($slug, $cityLabel);
+
+        if ($city === null) {
+            return false;
+        }
+
+        $this->showCraftsmen($senderId, $slug, $city, $platform);
+
+        return true;
+    }
+
+    private function resolveCityInCategory(string $slug, string $input): ?string
+    {
+        $category = Category::query()->active()->where('slug', $slug)->first();
+
+        if ($category === null) {
+            return null;
+        }
+
+        $normalizedInput = mb_strtolower(trim($input));
+
+        return $this->catalog->citiesForCategory($category->id)->first(
+            fn (string $city) => mb_strtolower($city) === $normalizedInput,
+        );
     }
 }

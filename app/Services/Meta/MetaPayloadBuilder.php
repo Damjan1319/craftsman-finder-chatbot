@@ -158,7 +158,18 @@ class MetaPayloadBuilder
 
     public function cityCallback(string $slug, string $city): string
     {
-        return 'city:'.$slug.':'.base64_encode($city);
+        return 'pick:'.rawurlencode($city);
+    }
+
+    public function parsePickCityCallback(string $data): ?string
+    {
+        if (! str_starts_with($data, 'pick:')) {
+            return null;
+        }
+
+        $city = rawurldecode(substr($data, 5));
+
+        return $city !== '' ? $city : null;
     }
 
     public function parseCityCallback(string $data): ?array

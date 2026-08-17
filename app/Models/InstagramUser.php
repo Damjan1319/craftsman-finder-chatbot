@@ -10,6 +10,7 @@ class InstagramUser extends Model
         'igsid',
         'username',
         'source',
+        'pending_category_slug',
         'last_interaction',
     ];
 
@@ -27,7 +28,7 @@ class InstagramUser extends Model
         if ($existing !== null) {
             $existing->update(['last_interaction' => now()]);
 
-            return $existing->fresh();
+            return $existing;
         }
 
         return static::query()->create([
@@ -35,5 +36,17 @@ class InstagramUser extends Model
             'source' => $source,
             'last_interaction' => now(),
         ]);
+    }
+
+    public function rememberCategory(string $slug): void
+    {
+        $this->update(['pending_category_slug' => $slug]);
+    }
+
+    public function clearCategory(): void
+    {
+        if ($this->pending_category_slug !== null) {
+            $this->update(['pending_category_slug' => null]);
+        }
     }
 }

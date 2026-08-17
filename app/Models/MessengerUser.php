@@ -11,6 +11,7 @@ class MessengerUser extends Model
         'first_name',
         'last_name',
         'source',
+        'pending_category_slug',
         'last_interaction',
     ];
 
@@ -36,5 +37,17 @@ class MessengerUser extends Model
             'source' => $source,
             'last_interaction' => now(),
         ]);
+    }
+
+    public function rememberCategory(string $slug): void
+    {
+        $this->update(['pending_category_slug' => $slug]);
+    }
+
+    public function clearCategory(): void
+    {
+        if ($this->pending_category_slug !== null) {
+            $this->update(['pending_category_slug' => null]);
+        }
     }
 }
